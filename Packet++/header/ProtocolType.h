@@ -101,6 +101,11 @@ namespace pcpp
 		DNS = 0x1000,
 
 		/**
+		 * QMETADATA protocol
+		 */
+		QMETADATA = 0x7777,
+
+		/**
 		 * MPLS protocol
 		 */
 		MPLS = 0x2000,

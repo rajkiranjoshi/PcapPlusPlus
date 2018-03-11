@@ -38,6 +38,7 @@ namespace pcpp
 		PacketLogModuleHttpLayer, ///< HttpLayer module (Packet++)
 		PacketLogModulePPPoELayer, ///< PPPoELayer module (Packet++)
 		PacketLogModuleDnsLayer, ///< DnsLayer module (Packet++)
+		PacketLogModuleQmetadataLayer, ///< Qmetadata module (Packet++)
 		PacketLogModuleMplsLayer, ///< MplsLayer module (Packet++)
 		PacketLogModuleIcmpLayer, ///< IcmpLayer module (Packet++)
 		PacketLogModuleGreLayer, ///< GreLayer module (Packet++)
