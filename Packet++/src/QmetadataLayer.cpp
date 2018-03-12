@@ -61,7 +61,7 @@ std::string QmetadataLayer::toString()
 
 	return "QmetadataLayer Layer, Seq No: " + seqNoStream.str() + ", Enq TS: " + enqTSStream.str()
 								  + ", Mark Bit: " + markbitStream.str() + ", Enq Qdepth: " + enqQdepthStream.str()
-								  + ", Deq Qdepth: " + deqQdepthStream.str() + ", Deq Timedelta: " + deqTimeDeltaStream.str() + "\n";
+								  + ", Deq Qdepth: " + deqQdepthStream.str() + ", Deq Timedelta: " + deqTimeDeltaStream.str();
 }
 
 } // namespace pcpp
