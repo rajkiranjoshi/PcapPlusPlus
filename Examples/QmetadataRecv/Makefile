@@ -5,4 +5,4 @@ all:
 	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o qmetadatarecv main.o $(PCAPPP_LIBS)
 
 clean:
-	rm main.o qmetadatarecv *.pcap
+	rm main.o qmetadatarecv
