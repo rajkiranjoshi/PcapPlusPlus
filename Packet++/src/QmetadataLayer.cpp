@@ -17,12 +17,13 @@ QmetadataLayer::QmetadataLayer(uint32_t seqNo)
 	memset(m_Data, 0, m_DataLen);
 	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
 	qmetaHdr->seqNo = htonl(seqNo);
-	m_Protocol = QMETADATA;
+	m_Protocol = QMETADATA; // important for layer identification for partial parsing
 }
 
 void QmetadataLayer::setSeqNo(uint32_t seqNo){
 	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
 	qmetaHdr->seqNo = htonl(seqNo);
+	m_Protocol = QMETADATA; // important for layer identification for partial parsing
 }
 
 void QmetadataLayer::parseNextLayer()
