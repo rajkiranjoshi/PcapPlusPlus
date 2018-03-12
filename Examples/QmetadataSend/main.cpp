@@ -7,43 +7,52 @@
 #include "UdpLayer.h"
 #include "PayloadLayer.h"
 #include "QmetadataLayer.h"
+#include <arpa/inet.h>
+#include <iostream>
 
-#define PAYLOAD_LENGTH 1438
+#define MTU_LENGTH 1500
 #define DEFAULT_TTL 12  
 
 
 int main(int argv, char* argc[]){
 
     // construct the required packet
-    pcpp::Packet newPacket(1500);
+    pcpp::Packet newPacket(MTU_LENGTH);
     pcpp::MacAddress srcMac("3c:fd:fe:b7:e7:f4");
     pcpp::MacAddress dstMac("aa:aa:aa:aa:aa:aa");
     pcpp::IPv4Address srcIP(std::string("10.1.1.2"));
-    pcpp::IPv4Address dstIP(std::string("30.1.1.2"));
-    uint16_t srcPort = 1; // 37777;
+    pcpp::IPv4Address dstIP(std::string("20.1.1.2"));
+    uint16_t srcPort = 37777;
     uint16_t dstPort = 7777;
 
     pcpp::EthLayer newEthLayer(srcMac, dstMac, PCPP_ETHERTYPE_IP); // 0x0800 -> IPv4
     pcpp::IPv4Layer newIPv4Layer(srcIP, dstIP);
     newIPv4Layer.getIPv4Header()->timeToLive = DEFAULT_TTL;
     pcpp::UdpLayer newUDPLayer(srcPort, dstPort);
-    pcpp::QmetadataLayer newQmetadataLayer(false);
+    pcpp::QmetadataLayer newQmetadataLayer(1);
 
-    newQmetadataLayer.getQmetadataHeader()->seqNo=1;
-    newQmetadataLayer.getQmetadataHeader()->markBit=1;
+    // newQmetadataLayer.getQmetadataHeader()->enqTimestamp=htonl(1);
+    // newQmetadataLayer.getQmetadataHeader()->markBit=htons(1);
+    // newQmetadataLayer.getQmetadataHeader()->enqQdepth=htonl(2);
+    // newQmetadataLayer.getQmetadataHeader()->deqQdepth=htonl(3);
+    // newQmetadataLayer.getQmetadataHeader()->deqTimedelta=htonl(4);
+
+    int length_so_far = newEthLayer.getHeaderLen() + newIPv4Layer.getHeaderLen() + 
+                        newUDPLayer.getHeaderLen() + newQmetadataLayer.getHeaderLen();
+    int payload_length = MTU_LENGTH - length_so_far;
     
-    uint8_t payload[PAYLOAD_LENGTH];
+    uint8_t payload[payload_length];
     int datalen = 4;
     char data[datalen] = {'D','A','T','A'};
     // Put the data values into the payload
     int j = 0;
-    for(int i=0; i < PAYLOAD_LENGTH; i++){
+    for(int i=0; i < payload_length; i++){
         payload[i] = (uint8_t) int(data[j]);
         j = (j + 1) % datalen;
     }
 
     // construct the payload layer
-    pcpp::PayloadLayer newPayLoadLayer(payload, PAYLOAD_LENGTH, false);
+    pcpp::PayloadLayer newPayLoadLayer(payload, payload_length, false);
 
     newPacket.addLayer(&newEthLayer);
     newPacket.addLayer(&newIPv4Layer);
@@ -56,7 +65,7 @@ int main(int argv, char* argc[]){
     newUDPLayer.calculateChecksum(true);
     newIPv4Layer.computeCalculateFields(); // this takes care of the IPv4 checksum
 
-
+/*
     // write the packet to a pcap file
     pcpp::PcapFileWriterDevice pcapWriter("output.pcap", pcpp::LINKTYPE_ETHERNET);
     if (!pcapWriter.open())
@@ -70,7 +79,7 @@ int main(int argv, char* argc[]){
     pcapWriter.writePacket(*rawPacket);
     pcapWriter.close();
 
-/*
+
     pcpp::PcapFileReaderDevice pcapReader("output.pcap");
 
     if(!pcapReader.open()){
@@ -94,6 +103,45 @@ int main(int argv, char* argc[]){
 
     std::cout << qmlayer->toString();
 */
+
+    std::string IPaddr = "10.1.1.2";
+
+    pcpp::PcapLiveDevice* dev = pcpp::PcapLiveDeviceList::getInstance().getPcapLiveDeviceByIp(IPaddr.c_str());
+
+    if (dev == NULL){
+        printf("Could not find the interface with IP '%s'\n", IPaddr.c_str());
+        exit(1);
+    }
+
+    // before capturing packets let's print some info about this interface
+    printf("Interface info:\n");
+    // get interface name
+    printf("   Interface name:        %s\n", dev->getName());
+    // get interface description
+    printf("   Interface description: %s\n", dev->getDesc());
+    // get interface MAC address
+    printf("   MAC address:           %s\n", dev->getMacAddress().toString().c_str());
+    // get default gateway for interface
+    printf("   Default gateway:       %s\n", dev->getDefaultGateway().toString().c_str());
+    // get interface MTU
+    printf("   Interface MTU:         %d\n", dev->getMtu());
+    // get DNS server if defined for this interface
+    if (dev->getDnsServers().size() > 0)
+        printf("   DNS server:            %s\n", dev->getDnsServers().at(0).toString().c_str());
+
+    // open the device before start capturing/sending packets
+    if (!dev->open())
+    {
+        printf("Cannot open device\n");
+        exit(1);
+    }
+
+    for(int i=0; i < 5; i++){
+        newQmetadataLayer.setSeqNo(i);
+        dev->sendPacket(&newPacket);
+    }
+
+    
 
     return 0;
 } // end of main()
