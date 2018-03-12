@@ -30,9 +30,9 @@ void my_handler(int s){
 static void onPacketArrives(pcpp::RawPacket* packet, pcpp::PcapLiveDevice* dev, void* cookie)
 {
     
-    // parsed the raw packet
-    pcpp::Packet parsedPacket(packet, pcpp::QMETADATA); // true -> free raw packet, while freeing Packet
-                                                        // QMETADATA -> parse until this layer only
+    // parse the raw packet
+    pcpp::Packet parsedPacket(packet, pcpp::QMETADATA); // QMETADATA -> parse until this layer only
+                                                        
     pcpp::QmetadataLayer* qmlayer = parsedPacket.getLayerOfType<pcpp::QmetadataLayer>();
 
     std::cout << qmlayer->toString();
