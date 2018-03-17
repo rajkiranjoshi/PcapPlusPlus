@@ -59,9 +59,9 @@ std::string QmetadataLayer::toString()
 	std::ostringstream deqTimeDeltaStream;
 	deqTimeDeltaStream << std::to_string(ntohl(qmetaHdr->deqTimedelta));
 
-	return "QmetadataLayer Layer, Seq No: " + seqNoStream.str() + ", Enq TS: " + enqTSStream.str()
-								  + ", Mark Bit: " + markbitStream.str() + ", Enq Qdepth: " + enqQdepthStream.str()
-								  + ", Deq Qdepth: " + deqQdepthStream.str() + ", Deq Timedelta: " + deqTimeDeltaStream.str();
+	return "[QmetadataLayer Layer] Seq No: " + seqNoStream.str() + " Enq TS: " + enqTSStream.str()
+								  + " Mark Bit: " + markbitStream.str() + " Enq Qdepth: " + enqQdepthStream.str()
+								  + " Deq Qdepth: " + deqQdepthStream.str() + " Deq Timedelta: " + deqTimeDeltaStream.str();
 }
 
 } // namespace pcpp
