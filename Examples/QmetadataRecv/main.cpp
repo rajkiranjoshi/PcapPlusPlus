@@ -35,7 +35,7 @@ static void onPacketArrives(pcpp::RawPacket* packet, pcpp::PcapLiveDevice* dev, 
                                                         
     pcpp::QmetadataLayer* qmlayer = parsedPacket.getLayerOfType<pcpp::QmetadataLayer>();
 
-    std::cout << qmlayer->toString();
+    std::cout << qmlayer->toString() << "\n";
 }
 
 
