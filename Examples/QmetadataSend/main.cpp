@@ -9,9 +9,46 @@
 #include "QmetadataLayer.h"
 #include <arpa/inet.h>
 #include <iostream>
+#include <thread>
+#include <signal.h>
 
+#define NUM_THREADS 2
 #define MTU_LENGTH 1500
-#define DEFAULT_TTL 12  
+#define DEFAULT_TTL 12
+
+std::vector<std::thread> workerThreads(NUM_THREADS);
+bool stopSending[NUM_THREADS];
+
+void interruptHandler(int s){
+    // printf("Caught signal %d\n",s);
+    // stop capturing packets
+    printf("\n Caught interrupt. Stopping sending threads...\n");
+
+    for(int i=0; i < NUM_THREADS; i++){
+        stopSending[i] = true;
+    }
+
+    for(auto& t : workerThreads){
+        t.join();
+    }
+
+}
+
+
+void send_func(int thread_id, pcpp::PcapLiveDevice* dev, pcpp::Packet parsedPacket, bool* stopSending){
+
+    printf("\n[Thread %d] Starting packet sending ...\n", thread_id);
+
+
+    pcpp::QmetadataLayer* qmetadatalayer = parsedPacket.getLayerOfType<pcpp::QmetadataLayer>();
+
+    
+    while(!*stopSending){
+        dev->sendPacket(&parsedPacket);
+    }
+
+    printf("\n[Thread %d] Stopping packet sending ...\n", thread_id);
+}
 
 
 int main(int argv, char* argc[]){
@@ -20,8 +57,8 @@ int main(int argv, char* argc[]){
     pcpp::Packet newPacket(MTU_LENGTH);
     pcpp::MacAddress srcMac("3c:fd:fe:b7:e7:f4");
     pcpp::MacAddress dstMac("aa:aa:aa:aa:aa:aa");
-    pcpp::IPv4Address srcIP(std::string("10.1.1.2"));
-    pcpp::IPv4Address dstIP(std::string("20.1.1.2"));
+    pcpp::IPv4Address srcIP(std::string("20.1.1.2"));
+    pcpp::IPv4Address dstIP(std::string("40.1.1.2"));
     uint16_t srcPort = 37777;
     uint16_t dstPort = 7777;
 
@@ -29,17 +66,13 @@ int main(int argv, char* argc[]){
     pcpp::IPv4Layer newIPv4Layer(srcIP, dstIP);
     newIPv4Layer.getIPv4Header()->timeToLive = DEFAULT_TTL;
     pcpp::UdpLayer newUDPLayer(srcPort, dstPort);
-    pcpp::QmetadataLayer newQmetadataLayer(1);
-
-    // newQmetadataLayer.getQmetadataHeader()->enqTimestamp=htonl(1);
-    // newQmetadataLayer.getQmetadataHeader()->markBit=htons(1);
-    // newQmetadataLayer.getQmetadataHeader()->enqQdepth=htonl(2);
-    // newQmetadataLayer.getQmetadataHeader()->deqQdepth=htonl(3);
-    // newQmetadataLayer.getQmetadataHeader()->deqTimedelta=htonl(4);
+    pcpp::QmetadataLayer newQmetadataLayer(0);
 
     int length_so_far = newEthLayer.getHeaderLen() + newIPv4Layer.getHeaderLen() + 
                         newUDPLayer.getHeaderLen() + newQmetadataLayer.getHeaderLen();
     int payload_length = MTU_LENGTH - length_so_far;
+
+    printf("Header length before the payload is %d\n", length_so_far);
     
     uint8_t payload[payload_length];
     int datalen = 4;
@@ -64,45 +97,6 @@ int main(int argv, char* argc[]){
     newUDPLayer.computeCalculateFields();
     newUDPLayer.calculateChecksum(true);
     newIPv4Layer.computeCalculateFields(); // this takes care of the IPv4 checksum
-
-/*
-    // write the packet to a pcap file
-    pcpp::PcapFileWriterDevice pcapWriter("output.pcap", pcpp::LINKTYPE_ETHERNET);
-    if (!pcapWriter.open())
-    {
-        printf("Cannot open output.pcap for writing\n");
-        exit(1);
-    }
-
-    const pcpp::RawPacket* rawPacket; // non constant pointer to constant data
-    rawPacket = newPacket.getRawPacketReadOnly();
-    pcapWriter.writePacket(*rawPacket);
-    pcapWriter.close();
-
-
-    pcpp::PcapFileReaderDevice pcapReader("output.pcap");
-
-    if(!pcapReader.open()){
-        printf("Cannot open the pcap file for reading\n");
-        exit(1);
-    }
-
-
-    // read the first (and only) packet from the file
-    pcpp::RawPacket rawPkt;
-    if (!pcapReader.getNextPacket(rawPkt))
-    {
-        printf("Couldn't read the first packet in the file\n");
-        return 1;
-    }
-
-    // parse the raw packet into a parsed packet
-    pcpp::Packet parsedPacket(&rawPkt);
-
-    pcpp::QmetadataLayer* qmlayer = parsedPacket.getLayerOfType<pcpp::QmetadataLayer>();
-
-    std::cout << qmlayer->toString();
-*/
 
     std::string IPaddr = "10.1.1.2";
 
@@ -136,10 +130,31 @@ int main(int argv, char* argc[]){
         exit(1);
     }
 
-    for(int i=0; i < 5; i++){
-        newQmetadataLayer.setSeqNo(i);
+/*    for(int i=0; i < 5; i++){
         dev->sendPacket(&newPacket);
+        PCAP_SLEEP(1);
+    }*/
+    
+    for(int i=0;i < NUM_THREADS; i++){
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(i, &cpuset); 
+
+        stopSending[i] = false; // this is thread UNSAFE. 
+                                // But in our case only the main thread writes. The worker threads simply read.
+        workerThreads[i] = std::thread(send_func, i, dev, newPacket, &stopSending[i]);
+        int aff = pthread_setaffinity_np(workerThreads[i].native_handle(), sizeof(cpu_set_t), &cpuset);
     }
+
+
+    // code to handle keyboard interrupt
+    struct sigaction sigIntHandler;
+    sigIntHandler.sa_handler = interruptHandler;
+    sigemptyset(&sigIntHandler.sa_mask);
+    sigIntHandler.sa_flags = 0;
+    sigaction(SIGINT, &sigIntHandler, NULL);
+
+    pause();
 
     
 
