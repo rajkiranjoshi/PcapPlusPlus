@@ -10,19 +10,19 @@
 namespace pcpp
 {
 
-QmetadataLayer::QmetadataLayer(uint32_t seqNo)
+QmetadataLayer::QmetadataLayer(uint16_t flowId)
 {
 	m_DataLen = sizeof(qmetadatahdr);
 	m_Data = new uint8_t[m_DataLen];
 	memset(m_Data, 0, m_DataLen);
 	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
-	qmetaHdr->seqNo = htonl(seqNo);
+	qmetaHdr->flowId = htons(flowId);
 	m_Protocol = QMETADATA; // important for layer identification for partial parsing
 }
 
-void QmetadataLayer::setSeqNo(uint32_t seqNo){
+void QmetadataLayer::setflowId(uint16_t flowId){
 	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
-	qmetaHdr->seqNo = htonl(seqNo);
+	qmetaHdr->flowId = htonl(flowId);
 	m_Protocol = QMETADATA; // important for layer identification for partial parsing
 }
 
@@ -41,8 +41,8 @@ std::string QmetadataLayer::toString()
 	qmetadatahdr* qmetaHdr;
 	qmetaHdr = getQmetadataHeader();
 	
-	std::ostringstream seqNoStream;
-	seqNoStream << std::to_string(ntohl(qmetaHdr->seqNo));
+	std::ostringstream flowIdStream;
+	flowIdStream << std::to_string(ntohs(qmetaHdr->flowId));
 
 	std::ostringstream enqTSStream;
 	enqTSStream << std::to_string(ntohl(qmetaHdr->enqTimestamp));
@@ -59,7 +59,7 @@ std::string QmetadataLayer::toString()
 	std::ostringstream deqTimeDeltaStream;
 	deqTimeDeltaStream << std::to_string(ntohl(qmetaHdr->deqTimedelta));
 
-	return "[QmetadataLayer Layer] Seq No: " + seqNoStream.str() + " Enq TS: " + enqTSStream.str()
+	return "[QmetadataLayer Layer] Seq No: " + flowIdStream.str() + " Enq TS: " + enqTSStream.str()
 								  + " Mark Bit: " + markbitStream.str() + " Enq Qdepth: " + enqQdepthStream.str()
 								  + " Deq Qdepth: " + deqQdepthStream.str() + " Deq Timedelta: " + deqTimeDeltaStream.str();
 }

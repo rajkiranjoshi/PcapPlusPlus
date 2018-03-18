@@ -27,7 +27,7 @@ namespace pcpp
 	struct qmetadatahdr // 22 bytes
 	{
 		/** Flow's pkt sequence number */
-		uint32_t seqNo;
+		uint16_t flowId;
 		/** Enqueue Timestamp */
 		uint32_t enqTimestamp;
 		/**	To mark candidate snapshot pkts */
@@ -61,11 +61,11 @@ namespace pcpp
 		QmetadataLayer(uint8_t* data, size_t dataLen, Layer* prevLayer, Packet* packet) : Layer(data, dataLen, prevLayer, packet) { m_Protocol = QMETADATA; }
 
 		/**
-		 * A constructor that creates an empty Qmetadata layer with only the seqNo set. All other fields are set to zero.
+		 * A constructor that creates an empty Qmetadata layer with only the flowId set. All other fields are set to zero.
 		 */
-		QmetadataLayer(uint32_t seqNo);
+		QmetadataLayer(uint16_t flowId);
 
-		void setSeqNo(uint32_t seqNo);
+		void setflowId(uint16_t flowId);
 			
 		/**
 		 * Get a pointer to the Qmetadata header. Notice this points directly to the data, so every change will change the actual packet data
