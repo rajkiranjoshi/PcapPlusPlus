@@ -147,14 +147,14 @@ int main(int argv, char* argc[]){
         printf("Exiting...\n");
         exit(1);
     }
-    
-/*    while(1)
+/*    
+    // 5 packets sending code 
+    for(int i=0; i < 5; i++)
     {
         sendPacketsTo->sendPacket(newPacket, 0); // 0 is the TX queue
     }
-*/
-
-    
+    exit(0);
+*/    
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(WORKER_THREAD_CORE, &cpuset); 
