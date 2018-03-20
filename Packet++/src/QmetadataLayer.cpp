@@ -6,6 +6,7 @@
 #include "Logger.h"
 #include <string.h>
 #include <sstream>
+#include <endian.h>
 
 namespace pcpp
 {
@@ -20,11 +21,48 @@ QmetadataLayer::QmetadataLayer(uint16_t flowId)
 	m_Protocol = QMETADATA; // important for layer identification for partial parsing
 }
 
-void QmetadataLayer::setflowId(uint16_t flowId){
+uint16_t QmetadataLayer::getFlowId()
+{
 	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
-	qmetaHdr->flowId = htonl(flowId);
-	m_Protocol = QMETADATA; // important for layer identification for partial parsing
+	return ntohs(qmetaHdr->flowId);
 }
+
+uint32_t QmetadataLayer::getEnqTimestamp()
+{
+	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
+	return ntohl(qmetaHdr->enqTimestamp);
+}
+
+uint64_t QmetadataLayer::getGlobalEgressTimestamp()
+{
+	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
+	return be64toh(qmetaHdr->globalEgressTimestamp);
+}
+
+uint16_t QmetadataLayer::getMarkBit()
+{
+	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
+	return ntohs(qmetaHdr->markBit);
+}
+
+uint32_t QmetadataLayer::getEnqQdepth()
+{
+	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
+	return ntohl(qmetaHdr->enqQdepth);
+}
+
+uint32_t QmetadataLayer::getDeqQdepth()
+{
+	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
+	return ntohl(qmetaHdr->deqQdepth);
+}
+
+uint32_t QmetadataLayer::getDeqTimedelta()
+{
+	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
+	return ntohl(qmetaHdr->deqTimedelta);
+}
+
 
 void QmetadataLayer::parseNextLayer()
 {
@@ -47,6 +85,9 @@ std::string QmetadataLayer::toString()
 	std::ostringstream enqTSStream;
 	enqTSStream << std::to_string(ntohl(qmetaHdr->enqTimestamp));
 
+	std::ostringstream globalEgressTSStream;
+	globalEgressTSStream << std::to_string(be64toh(qmetaHdr->globalEgressTimestamp));
+
 	std::ostringstream markbitStream;
 	markbitStream << std::to_string(ntohs(qmetaHdr->markBit));
 
@@ -59,9 +100,10 @@ std::string QmetadataLayer::toString()
 	std::ostringstream deqTimeDeltaStream;
 	deqTimeDeltaStream << std::to_string(ntohl(qmetaHdr->deqTimedelta));
 
-	return "[QmetadataLayer Layer] Seq No: " + flowIdStream.str() + " Enq TS: " + enqTSStream.str()
-								  + " Mark Bit: " + markbitStream.str() + " Enq Qdepth: " + enqQdepthStream.str()
-								  + " Deq Qdepth: " + deqQdepthStream.str() + " Deq Timedelta: " + deqTimeDeltaStream.str();
+	return "[QmetadataLayer Layer] Seq_No: " + flowIdStream.str() + " Enq_TS: " + enqTSStream.str() 
+								  + " Global_Egress_TS: " + globalEgressTSStream.str()
+								  + " Mark_Bit: " + markbitStream.str() + " Enq_Qdepth: " + enqQdepthStream.str()
+								  + " Deq_Qdepth: " + deqQdepthStream.str() + " Deq_Timedelta: " + deqTimeDeltaStream.str();
 }
 
 } // namespace pcpp

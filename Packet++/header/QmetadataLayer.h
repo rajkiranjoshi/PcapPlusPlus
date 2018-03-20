@@ -30,6 +30,8 @@ namespace pcpp
 		uint16_t flowId;
 		/** Enqueue Timestamp */
 		uint32_t enqTimestamp;
+		/** Global Egress Timestamp */
+		uint64_t globalEgressTimestamp;
 		/**	To mark candidate snapshot pkts */
 		uint16_t markBit;
 		/**	Enqueue Queue Depth */		
@@ -65,7 +67,16 @@ namespace pcpp
 		 */
 		QmetadataLayer(uint16_t flowId);
 
-		void setflowId(uint16_t flowId);
+		/**
+		 * Getters for all the different fields.
+		 */
+		uint16_t getFlowId();
+		uint32_t getEnqTimestamp();
+		uint64_t getGlobalEgressTimestamp();
+		uint16_t getMarkBit();
+		uint32_t getEnqQdepth();
+		uint32_t getDeqQdepth();
+		uint32_t getDeqTimedelta();
 			
 		/**
 		 * Get a pointer to the Qmetadata header. Notice this points directly to the data, so every change will change the actual packet data
