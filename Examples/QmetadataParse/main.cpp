@@ -21,6 +21,18 @@
 
 #define NUM_FIELDS 9
 
+typedef struct
+{
+    struct timeval captureTstamp;
+    int frameLen;
+    uint16_t flowId;
+    uint32_t enqTimestamp;
+    uint64_t globalEgressTimestamp;
+    uint16_t markBit;
+    uint32_t enqQdepth;
+    uint32_t deqQdepth;
+    uint32_t deqTimedelta;
+} ExtractedPacket;
 
 /*static struct option ParseOptions[] =
 {
@@ -32,6 +44,46 @@
 */
 static std::string valid_fields[NUM_FIELDS] = {"capturetstamp", "framelen", "egressglobaltstamp", "flowid", "enqtstamp", "markbit", 
                                      "enqqdepth", "deqqdepth", "deqtimedelta"};
+
+
+
+void printPacket(const ExtractedPacket &pkt, const std::vector<std::string> &currFieldsVectors, const unsigned long int &base_usecs)
+{
+        std::unordered_map<std::string,std::string> stringValueMap;
+        stringValueMap.clear();
+
+        unsigned long int curr_usecs = pkt.captureTstamp.tv_sec * 1000000L + pkt.captureTstamp.tv_usec;
+        unsigned long int actual_usecs = curr_usecs - base_usecs;
+
+        unsigned long int sec = actual_usecs / 1000000L;
+        unsigned long int usec = actual_usecs % 1000000L;     
+        
+        std::string captureTsString = "";
+        captureTsString = captureTsString + std::to_string(sec) + "." + std::to_string(usec);
+        
+        stringValueMap["capturetstamp"] = captureTsString;
+        stringValueMap["framelen"] = std::to_string(pkt.frameLen);
+        stringValueMap["flowid"] = std::to_string(pkt.flowId);
+        stringValueMap["enqtstamp"] = std::to_string(pkt.enqTimestamp);
+        stringValueMap["egressglobaltstamp"] = std::to_string(pkt.globalEgressTimestamp);
+        stringValueMap["markbit"] = std::to_string(pkt.markBit);
+        stringValueMap["enqqdepth"] = std::to_string(pkt.enqQdepth);
+        stringValueMap["deqqdepth"] = std::to_string(pkt.deqQdepth);
+        stringValueMap["deqtimedelta"] = std::to_string(pkt.deqTimedelta);
+
+        std::string outputString = "";
+
+        for(std::vector<std::string>::const_iterator it = currFieldsVectors.begin(); it != currFieldsVectors.end(); ++it)
+        {
+            outputString = outputString + stringValueMap[*it];
+            outputString = outputString + " ";
+        }
+
+        outputString.pop_back(); // remove the extra space at the end
+
+        std::cout << outputString << "\n";
+}
+
 
 
 /**
@@ -54,6 +106,7 @@ void printUsage(FILE *fout) {
             "                      deqtimedelta\n"
             "                      framelen (bytes)\n"
             "                      capturetstamp (s.us)\n"
+            "    -r              : Reduced file - only extract pkts when qdepths have changed"
             "    -h              : Displays this help message and exits\n"
             "    -v              : Displays the current version and exits\n", pcpp::AppName::get().c_str());
             
@@ -92,16 +145,20 @@ int main(int argc, char* argv[]){
     std::string field_list = "", filename = "";
 
     bool fieldlistProvided = false;
+    bool reducedFile = false;
     int optionIndex = 0;
     char opt = 0;
 
-    while((opt = getopt(argc, argv, "f:hv")) != -1) //, ParseOptions, &optionIndex)) != -1)
+    while((opt = getopt(argc, argv, "f:rhv")) != -1) //, ParseOptions, &optionIndex)) != -1)
     {
         switch (opt)
         {
             case 'f':
                 field_list = optarg;
                 fieldlistProvided = true;
+                break;
+            case 'r':
+                reducedFile = true;
                 break;
             case 'h':
                 printUsage(stdout);
@@ -149,20 +206,6 @@ int main(int argc, char* argv[]){
     }
 
 
-
-/*
-    if(argv != 2){
-        printf("Takes exactly one argument - the pcap file to parse\n");
-        exit(1);
-    }
-
-    std::string filename(argv[1]);
-*/
-
-
-
-    // exit(0);
-
     // use the IFileReaderDevice interface to automatically identify file type (pcap/pcap-ng)
     // and create an interface instance that both readers implement
     pcpp::IFileReaderDevice* reader = pcpp::IFileReaderDevice::getReader(filename.c_str());
@@ -184,84 +227,86 @@ int main(int argc, char* argv[]){
     // the packet container
     pcpp::RawPacket rawPacket;
     
-    std::vector<std::string> currFieldsVectors;
+    std::vector<std::string> currFieldsVector;
 
         if(fieldlistProvided){
-            currFieldsVectors = fieldsVector;
+            currFieldsVector = fieldsVector;
         }
         else{
-            currFieldsVectors.assign(valid_fields, valid_fields + NUM_FIELDS); // copy valid_fields array into currFieldsVectors
-         /*   std::cerr << "No field list specified! Dumping all fields in the following sequence:\n";
-            for(int i=0; i < NUM_FIELDS; i++){
-                std::cerr << valid_fields[i] << " ";
-            }
-            std::cerr << "\n";*/
+            currFieldsVector.assign(valid_fields, valid_fields + NUM_FIELDS); // copy valid_fields array into currFieldsVector
         }
 
-    bool base_initialized = false;
-    unsigned long int base_sec;
+    bool isFirstPacket = true;
+    // unsigned long int base_sec;
     unsigned long int base_usecs;
+    uint64_t prevWrittenTimestamp;
 
     // Print the column header
     std::string outputString = "";
-    for(std::vector<std::string>::iterator it = currFieldsVectors.begin(); it != currFieldsVectors.end(); ++it)
+    for(std::vector<std::string>::iterator it = currFieldsVector.begin(); it != currFieldsVector.end(); ++it)
     {
         outputString = outputString + *it;
         outputString = outputString + " ";
     }
     outputString.pop_back(); // remove the extra space at the end
     std::cout << outputString << "\n";
-    
+
+    ExtractedPacket currPkt, prevPkt;
+
     while (reader->getNextPacket(rawPacket))
     {
-        std::unordered_map<std::string,std::string> stringValueMap;
-        stringValueMap.clear();
-
-        // Extract the outside parameters: capturetstamp, framelen
-        struct timeval capturetstamp;
-        capturetstamp = rawPacket.getPacketTimeStamp();
-
-        if(!base_initialized){
-            base_usecs  = capturetstamp.tv_sec * 1000000L + capturetstamp.tv_usec;
-            base_initialized = true;
-        }
-
-        unsigned long int curr_usecs = capturetstamp.tv_sec * 1000000L + capturetstamp.tv_usec;
-        unsigned long int actual_usecs = curr_usecs - base_usecs;
-
-        unsigned long int sec = actual_usecs / 1000000L;
-        unsigned long int usec = actual_usecs % 1000000L;
-        
-        std::string captureTsString = "";
-        captureTsString = captureTsString + std::to_string(sec) + "." + std::to_string(usec);
-        
-        stringValueMap["capturetstamp"] = captureTsString;
-        stringValueMap["framelen"] = std::to_string(rawPacket.getFrameLength());
-
         // parse the raw packet
-        pcpp::Packet parsedPacket(&rawPacket, pcpp::QMETADATA); // QMETADATA -> parse until this layer only
-                                                        
+        pcpp::Packet parsedPacket(&rawPacket, pcpp::QMETADATA); // QMETADATA -> parse until this layer only                                                
         pcpp::QmetadataLayer* qmlayer = parsedPacket.getLayerOfType<pcpp::QmetadataLayer>();
 
-        stringValueMap["flowid"] = std::to_string(qmlayer->getFlowId());
-        stringValueMap["enqtstamp"] = std::to_string(qmlayer->getEnqTimestamp());
-        stringValueMap["egressglobaltstamp"] = std::to_string(qmlayer->getGlobalEgressTimestamp());
-        stringValueMap["markbit"] = std::to_string(qmlayer->getMarkBit());
-        stringValueMap["enqqdepth"] = std::to_string(qmlayer->getEnqQdepth());
-        stringValueMap["deqqdepth"] = std::to_string(qmlayer->getDeqQdepth());
-        stringValueMap["deqtimedelta"] = std::to_string(qmlayer->getDeqTimedelta());
+        // Extract the outside parameters: capturetstamp, framelen
+        currPkt.captureTstamp = rawPacket.getPacketTimeStamp();
+        currPkt.frameLen = rawPacket.getFrameLength();
 
-        std::string outputString = "";
+        // Extract the qmetadata parameters
+        currPkt.flowId = qmlayer->getFlowId();
+        currPkt.enqTimestamp = qmlayer->getEnqTimestamp();
+        currPkt.globalEgressTimestamp = qmlayer->getGlobalEgressTimestamp();
+        currPkt.markBit = qmlayer->getMarkBit();
+        currPkt.enqQdepth = qmlayer->getEnqQdepth();
+        currPkt.deqQdepth = qmlayer->getDeqQdepth();
+        currPkt.deqTimedelta = qmlayer->getDeqTimedelta();
 
-        for(std::vector<std::string>::iterator it = currFieldsVectors.begin(); it != currFieldsVectors.end(); ++it)
-        {
-            outputString = outputString + stringValueMap[*it];
-            outputString = outputString + " ";
+        if(isFirstPacket){
+            base_usecs  = currPkt.captureTstamp.tv_sec * 1000000L + currPkt.captureTstamp.tv_usec;
+            printPacket(currPkt, currFieldsVector, base_usecs);
+            isFirstPacket = false;
+
+            if(reducedFile){
+                prevPkt = currPkt;
+                prevWrittenTimestamp = currPkt.globalEgressTimestamp;
+            }
+
+            continue;
         }
 
-        outputString.pop_back(); // remove the extra space at the end
+        if(reducedFile){
+            if(currPkt.deqQdepth != prevPkt.deqQdepth || currPkt.enqQdepth != prevPkt.enqQdepth){
+                // something has changed in the queue
+                if(prevPkt.globalEgressTimestamp != prevWrittenTimestamp){
+                    // we need to write the previous packet
+                    printPacket(prevPkt, currFieldsVector, base_usecs);
+                }
+                printPacket(currPkt, currFieldsVector, base_usecs);
+                prevWrittenTimestamp = currPkt.globalEgressTimestamp;
+            }
+            prevPkt = currPkt;
+        }
+        else{// just print the current packet
+            printPacket(currPkt, currFieldsVector, base_usecs);
+        }
+    } // end of the while loop
 
-        std::cout << outputString << "\n";
+    if(reducedFile){
+        // write the last pkt in case it was not already written
+        if(prevPkt.globalEgressTimestamp != prevWrittenTimestamp){
+            printPacket(prevPkt, currFieldsVector, base_usecs);
+        }
     }
 
     reader->close();
