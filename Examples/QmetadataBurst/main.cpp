@@ -11,6 +11,7 @@
 #include <iostream>
 #include <thread>
 #include <signal.h>
+#include <unistd.h>  // for sleep() and usleep()
 
 using namespace std::chrono;
 using namespace pcpp;
@@ -21,47 +22,58 @@ using namespace std;
 #define CORE_MASK 341  // in binary it is 101010101. Meaning core # 8,6,4, 2 and 0 would be given to DPDK
                        // core 0 would be used as the DPDK master core by default. To change this, need to 
                        // change DpdkDeviceList::initDpdk() in DpdkDeviceList.cpp and rebuild PcapPlusPlus
-#define WORKER_THREAD_CORE 16  // vcpu # (as shown by lstopo). This is the second last core on socket #0
-#define MTU_LENGTH 1500
+
+#define SEND_THREAD_CORE 18 // vcpu # (as shown by lstopo). This is the last core on socket #0
+#define SEND_MTU_LENGTH 1500
+#define SENDER_DPDK_PORT 1
 #define DEFAULT_TTL 12
 
-#define DPDK_PORT 0
-#define NUM_PKTS_IN_BURST 100
+#define BURSTER_DPDK_PORT 0
+#define BURST_THREAD_CORE 16  // vcpu # (as shown by lstopo). This is the second last core on socket #0
+#define BURST_MTU_LENGTH 1500
+#define NUM_PKTS_IN_BURST 50
 
-std::thread workerThread;
+std::thread sendThread, burstThread;
 bool stopSending;
 
 void interruptHandler(int s){
-    // printf("Caught signal %d\n",s);
-    // stop capturing packets
-    printf("\nCaught interrupt. Stopping the sending thread...\n");
-
     
+    printf("\nCaught interrupt. Stopping the threads ...\n");
+
+    burstThread.join();
     stopSending = true;
-
-    workerThread.join();    
-
-/*    for(auto& t : workerThreads){
-        t.join();
-    }*/
-
+    sendThread.join();  
 }
 
 
-void send_func(DpdkDevice* dev, pcpp::Packet parsedPacket, bool* stopSending){
+void burst_func(DpdkDevice* dev, pcpp::Packet parsedPacket){
 
-    printf("\n[Sending Thread] Starting packet sending ...\n");
+    usleep(100000); // sleep for 100ms to allow thread affinity to be set
+    printf("\n[BURSTING Thread] Starting microbursts ...\n");
 
     pcpp::Packet* pkt_burst[NUM_PKTS_IN_BURST];
     std::fill_n(pkt_burst, NUM_PKTS_IN_BURST, &parsedPacket);
 
     const pcpp::Packet** burst_ptr = (const pcpp::Packet**) pkt_burst;    
 
-//    while(!*stopSending){
     dev->sendPackets(burst_ptr, NUM_PKTS_IN_BURST); // default Tx queue is 0
-//    }
 
-    printf("\n[Sending Thread] Stopping packet sending ...\n");
+    printf("\n[BURSTING Thread] Stopping microbursts ...\n");
+}
+
+
+void send_func(DpdkDevice* dev, pcpp::Packet parsedPacket, bool* stopSending){
+
+    printf("\n[SENDING Thread] Starting test traffic ...\n");
+
+    pcpp::QmetadataLayer* qmetadatalayer = parsedPacket.getLayerOfType<pcpp::QmetadataLayer>();
+
+        
+    while(!*stopSending){
+        dev->sendPacket(parsedPacket,0);
+    }
+
+    printf("\n[SENDING Thread] Stopping test traffic  ...\n");
 }
 
 
@@ -70,13 +82,15 @@ int main(int argv, char* argc[]){
     
     // LoggerPP::getInstance().setAllModlesToLogLevel(LoggerPP::Debug);
 
-    // construct the required packet
-    pcpp::Packet newPacket(MTU_LENGTH);
-    pcpp::MacAddress srcMac("3c:fd:fe:b7:e7:f4");
-    pcpp::MacAddress dstMac("aa:aa:aa:aa:aa:aa");
-    pcpp::IPv4Address srcIP(std::string("10.1.1.2"));
+    /********************** PACKET CONSTRUCTION **********************/
+
+    /* SENDER PKT CONSTRUCTION STARTS */
+    pcpp::Packet newSendPacket(SEND_MTU_LENGTH);
+    pcpp::MacAddress srcMac("3c:fd:fe:b7:e7:f5");
+    pcpp::MacAddress dstMac("bb:bb:bb:bb:bb:bb");
+    pcpp::IPv4Address srcIP(std::string("20.1.1.2"));
     pcpp::IPv4Address dstIP(std::string("40.1.1.2"));
-    uint16_t srcPort = 47777;
+    uint16_t srcPort = 37777;
     uint16_t dstPort = 7777;
 
     pcpp::EthLayer newEthLayer(srcMac, dstMac, PCPP_ETHERTYPE_IP); // 0x0800 -> IPv4
@@ -87,9 +101,9 @@ int main(int argv, char* argc[]){
 
     int length_so_far = newEthLayer.getHeaderLen() + newIPv4Layer.getHeaderLen() + 
                         newUDPLayer.getHeaderLen() + newQmetadataLayer.getHeaderLen();
-    int payload_length = MTU_LENGTH - length_so_far;
+    int payload_length = SEND_MTU_LENGTH - length_so_far;
 
-    printf("Header length before the payload is %d\n", length_so_far);
+    printf("SEND Header length before the payload is %d\n", length_so_far);
     
     uint8_t payload[payload_length];
     int datalen = 4;
@@ -104,16 +118,71 @@ int main(int argv, char* argc[]){
     // construct the payload layer
     pcpp::PayloadLayer newPayLoadLayer(payload, payload_length, false);
 
-    newPacket.addLayer(&newEthLayer);
-    newPacket.addLayer(&newIPv4Layer);
-    newPacket.addLayer(&newUDPLayer);
-    newPacket.addLayer(&newQmetadataLayer);
-    newPacket.addLayer(&newPayLoadLayer);
+    newSendPacket.addLayer(&newEthLayer);
+    newSendPacket.addLayer(&newIPv4Layer);
+    newSendPacket.addLayer(&newUDPLayer);
+    newSendPacket.addLayer(&newQmetadataLayer);
+    newSendPacket.addLayer(&newPayLoadLayer);
 
     // compute the calculated fields
     newUDPLayer.computeCalculateFields();
     newUDPLayer.calculateChecksum(true);
     newIPv4Layer.computeCalculateFields(); // this takes care of the IPv4 checksum
+
+    /* SENDER PKT CONSTRUCTION ENDS */
+
+
+    /* BURST PKT CONSTRUCTION STARTS */
+    pcpp::Packet newBurstPacket(BURST_MTU_LENGTH);
+    pcpp::MacAddress srcMacBurst("3c:fd:fe:b7:e7:f4");
+    pcpp::MacAddress dstMacBurst("aa:aa:aa:aa:aa:aa");
+    pcpp::IPv4Address srcIPBurst(std::string("10.1.1.2"));
+    pcpp::IPv4Address dstIPBurst(std::string("40.1.1.2"));
+    uint16_t srcPortBurst = 47777;
+    uint16_t dstPortBurst = 7777;
+
+    pcpp::EthLayer newEthLayerBurst(srcMacBurst, dstMacBurst, PCPP_ETHERTYPE_IP); // 0x0800 -> IPv4
+    pcpp::IPv4Layer newIPv4LayerBurst(srcIPBurst, dstIPBurst);
+    newIPv4LayerBurst.getIPv4Header()->timeToLive = DEFAULT_TTL;
+    pcpp::UdpLayer newUDPLayerBurst(srcPortBurst, dstPortBurst);
+    pcpp::QmetadataLayer newQmetadataLayerBurst(1);
+
+    length_so_far = newEthLayerBurst.getHeaderLen() + newIPv4LayerBurst.getHeaderLen() + 
+                        newUDPLayerBurst.getHeaderLen() + newQmetadataLayerBurst.getHeaderLen();
+    payload_length = BURST_MTU_LENGTH - length_so_far;
+
+    printf("BURST Header length before the payload is %d\n", length_so_far);
+    
+    uint8_t payloadBurst[payload_length];
+    datalen = 5;
+    char burstdata[datalen] = {'B','U','R','S','T'};
+    // Put the data values into the payload
+    j = 0;
+    for(int i=0; i < payload_length; i++){
+        payloadBurst[i] = (uint8_t) int(burstdata[j]);
+        j = (j + 1) % datalen;
+    }
+
+    // construct the payload layer
+    pcpp::PayloadLayer newPayLoadLayerBurst(payloadBurst, payload_length, false);
+
+    newBurstPacket.addLayer(&newEthLayerBurst);
+    newBurstPacket.addLayer(&newIPv4LayerBurst);
+    newBurstPacket.addLayer(&newUDPLayerBurst);
+    newBurstPacket.addLayer(&newQmetadataLayerBurst);
+    newBurstPacket.addLayer(&newPayLoadLayerBurst);
+
+    // compute the calculated fields
+    newUDPLayerBurst.computeCalculateFields();
+    newUDPLayerBurst.calculateChecksum(true);
+    newIPv4LayerBurst.computeCalculateFields(); // this takes care of the IPv4 checksum
+
+
+    /* BURST PKT CONSTRUCTION ENDS */
+
+
+    /********************** DPDK INITIALIZATION **********************/
+
 
     if(DpdkDeviceList::initDpdk(CORE_MASK, MBUFF_POOL_SIZE))
         printf("DPDK initialization completed successfully\n");
@@ -135,50 +204,102 @@ int main(int argv, char* argc[]){
                 dev->getPMDName().c_str());
     }
 
-    int sendPacketsToPort = DPDK_PORT;
-    DpdkDevice* sendPacketsTo = DpdkDeviceList::getInstance().getDeviceByPort(sendPacketsToPort);
+
+    // Open the two DPDK ports
+
+    DpdkDevice::LinkStatus linkstatus1,linkstatus2;
+    
+    DpdkDevice* sendPacketsTo = DpdkDeviceList::getInstance().getDeviceByPort(SENDER_DPDK_PORT);
     if (sendPacketsTo != NULL && !sendPacketsTo->open())
     {
-        printf("Could not open port#%d for sending packets\n", sendPacketsToPort);
+        printf("Could not open port#%d for sending packets\n", SENDER_DPDK_PORT);
         exit(1);
     }
+    else{
+        printf("SENDING TEST TRAFFIC ON DPDK PORT %d\n", SENDER_DPDK_PORT);
+    }
+    
+    sendPacketsTo->getLinkStatus(linkstatus1);
+    printf("The link on DPDK port %d is %s\n",SENDER_DPDK_PORT,linkstatus1.linkUp?"UP":"Down");
 
-    DpdkDevice::LinkStatus linkstatus;
-    sendPacketsTo->getLinkStatus(linkstatus);
 
-    printf("The link is %s\n",linkstatus.linkUp?"UP":"Down");
+    DpdkDevice* burstPacketsTo = DpdkDeviceList::getInstance().getDeviceByPort(BURSTER_DPDK_PORT);
+/*
+    if(BURST_MTU_LENGTH > 1500){
+        if(burstPacketsTo->setMtu(BURST_MTU_LENGTH)){
+            printf("MTU successfully changed to %d for DPDK device %d\n", BURST_MTU_LENGTH, BURSTER_DPDK_PORT);
+        }
+        else{
+            printf("MTU change request failed for DPDK device %d\n", BURSTER_DPDK_PORT);
+            exit(1);
+        }
+    }
+*/
+    if (burstPacketsTo != NULL && !burstPacketsTo->open())
+    {
+        printf("Could not open port#%d for sending packets\n", BURSTER_DPDK_PORT);
+        exit(1);
+    }
+    else{
+        printf("SENDING BURST TRAFFIC ON DPDK PORT %d\n", BURSTER_DPDK_PORT);
+    }
+    
+    burstPacketsTo->getLinkStatus(linkstatus2);
+    printf("The link on DPDK port %d is %s\n",BURSTER_DPDK_PORT,linkstatus2.linkUp?"UP":"Down");
 
-    if(!linkstatus.linkUp){
+    
+    if(!linkstatus1.linkUp || !linkstatus2.linkUp){
         printf("Exiting...\n");
         exit(1);
     }
-/*    
-    // 5 packets sending code 
-    for(int i=0; i < 5; i++)
-    {
-        sendPacketsTo->sendPacket(newPacket, 0); // 0 is the TX queue
-    }
-    exit(0);
-*/    
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(WORKER_THREAD_CORE, &cpuset); 
+
+    
+
+
+    /********* THREAD INITIALIZATION & MANAGEMENT *********/
+ 
+    /* SENDER THREAD */
+    cpu_set_t cpuset1;
+    CPU_ZERO(&cpuset1);
+    CPU_SET(SEND_THREAD_CORE, &cpuset1); 
 
     stopSending = false; // this is thread UNSAFE. 
-                         // But in our case only the main thread writes. The worker threads simply read.
+                         // But in our case only the main thread writes. The sender thread simply reads.
     
-    workerThread = std::thread(send_func, sendPacketsTo, newPacket, &stopSending);
-    int aff = pthread_setaffinity_np(workerThread.native_handle(), sizeof(cpu_set_t), &cpuset);
-    printf("Sending thread now running on vcpu #%d\n", WORKER_THREAD_CORE);
+    sendThread = std::thread(send_func, sendPacketsTo, newSendPacket, &stopSending);
+    int aff = pthread_setaffinity_np(sendThread.native_handle(), sizeof(cpu_set_t), &cpuset1);
+    printf("Sending thread now running on vcpu #%d\n", SEND_THREAD_CORE);
+
+
+    printf("Sleeping for 400ms before starting the BURST thread\n");
+    usleep(400000); // 400ms
+
+
+    /* BURSTER THREAD */
+    cpu_set_t cpuset2;
+    CPU_ZERO(&cpuset2);
+    CPU_SET(BURST_THREAD_CORE, &cpuset2);
     
-    // code to handle keyboard interrupt
+    burstThread = std::thread(burst_func, burstPacketsTo, newBurstPacket);
+    aff = pthread_setaffinity_np(burstThread.native_handle(), sizeof(cpu_set_t), &cpuset2);
+    printf("Bursting thread now running on vcpu #%d\n", BURST_THREAD_CORE);
+
+
+    
+    /********* INTERRUPT HANDLING *********/
     struct sigaction sigIntHandler;
     sigIntHandler.sa_handler = interruptHandler;
     sigemptyset(&sigIntHandler.sa_mask);
     sigIntHandler.sa_flags = 0;
     sigaction(SIGINT, &sigIntHandler, NULL);
 
-    workerThread.join();
+    
+    /********* NORMAL SHUTTING DOWN SEQUENCE *********/
+    burstThread.join();
+    printf("Sleeping for 2 seconds before stopping the SEND thread\n");
+    sleep(2.5);
+    stopSending = true;
+    sendThread.join();
 
     // pause();
 
