@@ -25,6 +25,8 @@ using namespace std;
 #define MTU_LENGTH 1500
 #define DEFAULT_TTL 12
 
+#define DPDK_PORT 1
+
 std::thread workerThread;
 bool stopSending;
 
@@ -69,7 +71,7 @@ int main(int argv, char* argc[]){
     pcpp::Packet newPacket(MTU_LENGTH);
     pcpp::MacAddress srcMac("3c:fd:fe:b7:e7:f4");
     pcpp::MacAddress dstMac("aa:aa:aa:aa:aa:aa");
-    pcpp::IPv4Address srcIP(std::string("10.1.1.2"));
+    pcpp::IPv4Address srcIP(std::string("20.1.1.2"));
     pcpp::IPv4Address dstIP(std::string("40.1.1.2"));
     uint16_t srcPort = 37777;
     uint16_t dstPort = 7777;
@@ -130,7 +132,7 @@ int main(int argv, char* argc[]){
                 dev->getPMDName().c_str());
     }
 
-    int sendPacketsToPort = 0;
+    int sendPacketsToPort = DPDK_PORT;
     DpdkDevice* sendPacketsTo = DpdkDeviceList::getInstance().getDeviceByPort(sendPacketsToPort);
     if (sendPacketsTo != NULL && !sendPacketsTo->open())
     {
@@ -147,14 +149,14 @@ int main(int argv, char* argc[]){
         printf("Exiting...\n");
         exit(1);
     }
-/*    
-    // 5 packets sending code 
-    for(int i=0; i < 5; i++)
+    
+/*    // 10 packets sending code 
+    for(int i=0; i < 10; i++)
     {
         sendPacketsTo->sendPacket(newPacket, 0); // 0 is the TX queue
     }
     exit(0);
-*/    
+    */
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(WORKER_THREAD_CORE, &cpuset); 
