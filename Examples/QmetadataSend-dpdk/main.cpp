@@ -23,6 +23,7 @@ using namespace std;
                        // change DpdkDeviceList::initDpdk() in DpdkDeviceList.cpp and rebuild PcapPlusPlus
 #define WORKER_THREAD_CORE 18  // vcpu # (as shown by lstopo). This is the last core on socket #0
 #define MTU_LENGTH 1500
+#define SEND_RATE_SKIP_PACKETS 318 // helps reduce send rate to 5 Gbps
 #define DEFAULT_TTL 12
 
 #define DPDK_PORT 1
@@ -53,9 +54,12 @@ void send_func(DpdkDevice* dev, pcpp::Packet parsedPacket, bool* stopSending){
 
     pcpp::QmetadataLayer* qmetadatalayer = parsedPacket.getLayerOfType<pcpp::QmetadataLayer>();
 
-        
+    //int i = 0;
     while(!*stopSending){
-        dev->sendPacket(parsedPacket,0);
+      //  if(i == 0){
+            dev->sendPacket(parsedPacket,0);
+      //  }
+      //  i = (i+1) % SEND_RATE_SKIP_PACKETS;
     }
 
     printf("\n[Sending Thread] Stopping packet sending ...\n");
