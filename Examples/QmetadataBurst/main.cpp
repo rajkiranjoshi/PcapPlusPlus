@@ -25,13 +25,14 @@ using namespace std;
 
 #define SEND_THREAD_CORE 18 // vcpu # (as shown by lstopo). This is the last core on socket #0
 #define SEND_MTU_LENGTH 1500
+#define SEND_RATE_SKIP_PACKETS 318 // helps reduce send rate to 5 Gbps
 #define SENDER_DPDK_PORT 1
 #define DEFAULT_TTL 12
 
 #define BURSTER_DPDK_PORT 0
 #define BURST_THREAD_CORE 16  // vcpu # (as shown by lstopo). This is the second last core on socket #0
 #define BURST_MTU_LENGTH 1500
-#define NUM_PKTS_IN_BURST 50
+#define NUM_PKTS_IN_BURST 24
 
 std::thread sendThread, burstThread;
 bool stopSending;
@@ -68,9 +69,12 @@ void send_func(DpdkDevice* dev, pcpp::Packet parsedPacket, bool* stopSending){
 
     pcpp::QmetadataLayer* qmetadatalayer = parsedPacket.getLayerOfType<pcpp::QmetadataLayer>();
 
-        
+    int i = 0;
     while(!*stopSending){
-        dev->sendPacket(parsedPacket,0);
+        if(i == 0){
+            dev->sendPacket(parsedPacket,0);
+        }
+        i = (i+1) % SEND_RATE_SKIP_PACKETS;
     }
 
     printf("\n[SENDING Thread] Stopping test traffic  ...\n");
@@ -271,7 +275,7 @@ int main(int argv, char* argc[]){
     printf("Sending thread now running on vcpu #%d\n", SEND_THREAD_CORE);
 
 
-    printf("Sleeping for 400ms before starting the BURST thread\n");
+    printf("Sleeping for 500ms before starting the BURST thread\n");
     usleep(400000); // 400ms
 
 
@@ -296,8 +300,8 @@ int main(int argv, char* argc[]){
     
     /********* NORMAL SHUTTING DOWN SEQUENCE *********/
     burstThread.join();
-    printf("Sleeping for 2 seconds before stopping the SEND thread\n");
-    sleep(2.5);
+    printf("Sleeping for 500 ms before stopping the SEND thread\n");
+    usleep(500000); // 500ms
     stopSending = true;
     sendThread.join();
 
