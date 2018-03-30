@@ -24,7 +24,7 @@ namespace pcpp
 	 * Represents the fixed queuing metadata header
 	 */
 #pragma pack(push, 1)
-	struct qmetadatahdr // 22 bytes
+	struct qmetadatahdr // 28 bytes
 	{
 		/** Flow's pkt sequence number */
 		uint16_t flowId;
