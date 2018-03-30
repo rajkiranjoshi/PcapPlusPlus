@@ -25,14 +25,15 @@ using namespace std;
 
 #define SEND_THREAD_CORE 18 // vcpu # (as shown by lstopo). This is the last core on socket #0
 #define SEND_MTU_LENGTH 1500
-#define SEND_RATE_SKIP_PACKETS 318 // helps reduce send rate to 5 Gbps
+#define SEND_RATE_SKIP_PACKETS 318 // helps reduce send rate to 5 Gbps. Old value 318 --> giving 3.72 for short run
 #define SENDER_DPDK_PORT 1
 #define DEFAULT_TTL 12
 
 #define BURSTER_DPDK_PORT 0
 #define BURST_THREAD_CORE 16  // vcpu # (as shown by lstopo). This is the second last core on socket #0
 #define BURST_MTU_LENGTH 1500
-#define NUM_PKTS_IN_BURST 24
+#define NUM_PKTS_IN_BURST 42
+#define NUM_BURSTS 5  // the bursts are separated by 1ms gap
 
 std::thread sendThread, burstThread;
 bool stopSending;
@@ -41,8 +42,8 @@ void interruptHandler(int s){
     
     printf("\nCaught interrupt. Stopping the threads ...\n");
 
-    burstThread.join();
     stopSending = true;
+    burstThread.join();
     sendThread.join();  
 }
 
@@ -50,22 +51,26 @@ void interruptHandler(int s){
 void burst_func(DpdkDevice* dev, pcpp::Packet parsedPacket){
 
     usleep(100000); // sleep for 100ms to allow thread affinity to be set
-    printf("\n[BURSTING Thread] Starting microbursts ...\n");
+    printf("[BURSTING Thread] Starting microbursts ...\n");
 
     pcpp::Packet* pkt_burst[NUM_PKTS_IN_BURST];
     std::fill_n(pkt_burst, NUM_PKTS_IN_BURST, &parsedPacket);
 
     const pcpp::Packet** burst_ptr = (const pcpp::Packet**) pkt_burst;    
 
-    dev->sendPackets(burst_ptr, NUM_PKTS_IN_BURST); // default Tx queue is 0
+    for(int i=0; i < NUM_BURSTS; i++){
+    // while(!stopSending)
+        dev->sendPackets(burst_ptr, NUM_PKTS_IN_BURST); // default Tx queue is 0
+        usleep(1000); // 1 ms gap between the bursts
+    }
 
-    printf("\n[BURSTING Thread] Stopping microbursts ...\n");
+    printf("[BURSTING Thread] Stopping microbursts ...\n");
 }
 
 
 void send_func(DpdkDevice* dev, pcpp::Packet parsedPacket, bool* stopSending){
 
-    printf("\n[SENDING Thread] Starting test traffic ...\n");
+    printf("[SENDING Thread] Starting test traffic ...\n");
 
     pcpp::QmetadataLayer* qmetadatalayer = parsedPacket.getLayerOfType<pcpp::QmetadataLayer>();
 
@@ -77,7 +82,7 @@ void send_func(DpdkDevice* dev, pcpp::Packet parsedPacket, bool* stopSending){
         i = (i+1) % SEND_RATE_SKIP_PACKETS;
     }
 
-    printf("\n[SENDING Thread] Stopping test traffic  ...\n");
+    printf("[SENDING Thread] Stopping test traffic  ...\n");
 }
 
 
@@ -228,17 +233,7 @@ int main(int argv, char* argc[]){
 
 
     DpdkDevice* burstPacketsTo = DpdkDeviceList::getInstance().getDeviceByPort(BURSTER_DPDK_PORT);
-/*
-    if(BURST_MTU_LENGTH > 1500){
-        if(burstPacketsTo->setMtu(BURST_MTU_LENGTH)){
-            printf("MTU successfully changed to %d for DPDK device %d\n", BURST_MTU_LENGTH, BURSTER_DPDK_PORT);
-        }
-        else{
-            printf("MTU change request failed for DPDK device %d\n", BURSTER_DPDK_PORT);
-            exit(1);
-        }
-    }
-*/
+
     if (burstPacketsTo != NULL && !burstPacketsTo->open())
     {
         printf("Could not open port#%d for sending packets\n", BURSTER_DPDK_PORT);
@@ -274,10 +269,12 @@ int main(int argv, char* argc[]){
     int aff = pthread_setaffinity_np(sendThread.native_handle(), sizeof(cpu_set_t), &cpuset1);
     printf("Sending thread now running on vcpu #%d\n", SEND_THREAD_CORE);
 
-
-    printf("Sleeping for 500ms before starting the BURST thread\n");
-    usleep(400000); // 400ms
-
+    sleep(1);
+    printf("Sleeping for 10s before starting the BURST thread\n");
+    sleep(10);
+    printf("\n### Start the packet capture at receiver NOW ###\n");
+    printf("Press any key to continue . . .\n");
+    getchar();
 
     /* BURSTER THREAD */
     cpu_set_t cpuset2;
