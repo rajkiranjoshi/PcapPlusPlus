@@ -75,7 +75,7 @@ int main(int argv, char* argc[]){
     printf("Header length before the payload is %d\n", length_so_far);
     
     uint8_t payload[payload_length];
-    int datalen = 4;
+    const int datalen = 4;
     char data[datalen] = {'D','A','T','A'};
     // Put the data values into the payload
     int j = 0;
