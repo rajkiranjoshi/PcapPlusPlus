@@ -33,7 +33,7 @@ using namespace std;
 #define BURST_THREAD_CORE 16  // vcpu # (as shown by lstopo). This is the second last core on socket #0
 #define BURST_MTU_LENGTH 1500
 #define NUM_PKTS_IN_BURST 42
-#define NUM_BURSTS 5  // the bursts are separated by 1ms gap
+#define NUM_BURSTS 10  // the bursts are separated by 1ms gap
 
 std::thread sendThread, burstThread;
 bool stopSending;
@@ -106,7 +106,7 @@ int main(int argv, char* argc[]){
     pcpp::IPv4Layer newIPv4Layer(srcIP, dstIP);
     newIPv4Layer.getIPv4Header()->timeToLive = DEFAULT_TTL;
     pcpp::UdpLayer newUDPLayer(srcPort, dstPort);
-    pcpp::QmetadataLayer newQmetadataLayer(1);
+    pcpp::QmetadataLayer newQmetadataLayer(0);
 
     int length_so_far = newEthLayer.getHeaderLen() + newIPv4Layer.getHeaderLen() + 
                         newUDPLayer.getHeaderLen() + newQmetadataLayer.getHeaderLen();
