@@ -28,8 +28,8 @@ namespace pcpp
 	{
 		/** Flow's pkt sequence number */
 		uint16_t flowId;
-		/** Enqueue Timestamp */
-		uint32_t enqTimestamp;
+		/** Global Egress Timestamp */
+		uint64_t globalIngressTimestamp;
 		/** Global Egress Timestamp */
 		uint64_t globalEgressTimestamp;
 		/**	To mark candidate snapshot pkts */
@@ -38,8 +38,6 @@ namespace pcpp
 		uint32_t enqQdepth;
 		/** Dequeue Queue Depth */
 		uint32_t deqQdepth;
-		/** Dequeue Timedelta */
-		uint32_t deqTimedelta;
 	};
 #pragma pack(pop)
 
@@ -71,12 +69,11 @@ namespace pcpp
 		 * Getters for all the different fields.
 		 */
 		uint16_t getFlowId();
-		uint32_t getEnqTimestamp();
+		uint64_t getGlobalIngressTimestamp();
 		uint64_t getGlobalEgressTimestamp();
 		uint16_t getMarkBit();
 		uint32_t getEnqQdepth();
 		uint32_t getDeqQdepth();
-		uint32_t getDeqTimedelta();
 			
 		/**
 		 * Get a pointer to the Qmetadata header. Notice this points directly to the data, so every change will change the actual packet data

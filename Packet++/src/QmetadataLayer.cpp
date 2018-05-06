@@ -27,10 +27,10 @@ uint16_t QmetadataLayer::getFlowId()
 	return ntohs(qmetaHdr->flowId);
 }
 
-uint32_t QmetadataLayer::getEnqTimestamp()
+uint64_t QmetadataLayer::getGlobalIngressTimestamp()
 {
 	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
-	return ntohl(qmetaHdr->enqTimestamp);
+	return be64toh(qmetaHdr->globalIngressTimestamp);
 }
 
 uint64_t QmetadataLayer::getGlobalEgressTimestamp()
@@ -57,11 +57,6 @@ uint32_t QmetadataLayer::getDeqQdepth()
 	return ntohl(qmetaHdr->deqQdepth);
 }
 
-uint32_t QmetadataLayer::getDeqTimedelta()
-{
-	qmetadatahdr* qmetaHdr = (qmetadatahdr*)m_Data;
-	return ntohl(qmetaHdr->deqTimedelta);
-}
 
 
 void QmetadataLayer::parseNextLayer()
@@ -82,8 +77,8 @@ std::string QmetadataLayer::toString()
 	std::ostringstream flowIdStream;
 	flowIdStream << std::to_string(ntohs(qmetaHdr->flowId));
 
-	std::ostringstream enqTSStream;
-	enqTSStream << std::to_string(ntohl(qmetaHdr->enqTimestamp));
+	std::ostringstream globalIngressTSStream;
+	globalIngressTSStream << std::to_string(be64toh(qmetaHdr->globalIngressTimestamp));	
 
 	std::ostringstream globalEgressTSStream;
 	globalEgressTSStream << std::to_string(be64toh(qmetaHdr->globalEgressTimestamp));
@@ -97,13 +92,12 @@ std::string QmetadataLayer::toString()
 	std::ostringstream deqQdepthStream;
 	deqQdepthStream << std::to_string(ntohl(qmetaHdr->deqQdepth));
 
-	std::ostringstream deqTimeDeltaStream;
-	deqTimeDeltaStream << std::to_string(ntohl(qmetaHdr->deqTimedelta));
 
-	return "[QmetadataLayer Layer] Seq_No: " + flowIdStream.str() + " Enq_TS: " + enqTSStream.str() 
+	return "[QmetadataLayer Layer] Seq_No: " + flowIdStream.str()
+								  + " Global_Ingress_TS: " + globalIngressTSStream.str()
 								  + " Global_Egress_TS: " + globalEgressTSStream.str()
 								  + " Mark_Bit: " + markbitStream.str() + " Enq_Qdepth: " + enqQdepthStream.str()
-								  + " Deq_Qdepth: " + deqQdepthStream.str() + " Deq_Timedelta: " + deqTimeDeltaStream.str();
+								  + " Deq_Qdepth: " + deqQdepthStream.str() ;
 }
 
 } // namespace pcpp
