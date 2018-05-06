@@ -26,12 +26,11 @@ typedef struct
     struct timeval captureTstamp;
     int frameLen;
     uint16_t flowId;
-    uint32_t enqTimestamp;
+    uint64_t globalIngressTimestamp;
     uint64_t globalEgressTimestamp;
     uint16_t markBit;
     uint32_t enqQdepth;
     uint32_t deqQdepth;
-    uint32_t deqTimedelta;
 } ExtractedPacket;
 
 /*static struct option ParseOptions[] =
@@ -42,8 +41,8 @@ typedef struct
     {0, 0, 0, 0}
 };
 */
-static std::string valid_fields[NUM_FIELDS] = {"capturetstamp", "framelen", "egressglobaltstamp", "flowid", "enqtstamp", "markbit", 
-                                     "enqqdepth", "deqqdepth", "deqtimedelta"};
+static std::string valid_fields[NUM_FIELDS] = {"capturetstamp", "framelen", "ingressglobaltstamp", "egressglobaltstamp", "flowid", "markbit", 
+                                     "enqqdepth", "deqqdepth"};
 
 
 
@@ -64,12 +63,11 @@ void printPacket(const ExtractedPacket &pkt, const std::vector<std::string> &cur
         stringValueMap["capturetstamp"] = captureTsString;
         stringValueMap["framelen"] = std::to_string(pkt.frameLen);
         stringValueMap["flowid"] = std::to_string(pkt.flowId);
-        stringValueMap["enqtstamp"] = std::to_string(pkt.enqTimestamp);
+        stringValueMap["ingressglobaltstamp"] = std::to_string(pkt.globalIngressTimestamp);
         stringValueMap["egressglobaltstamp"] = std::to_string(pkt.globalEgressTimestamp);
         stringValueMap["markbit"] = std::to_string(pkt.markBit);
         stringValueMap["enqqdepth"] = std::to_string(pkt.enqQdepth);
         stringValueMap["deqqdepth"] = std::to_string(pkt.deqQdepth);
-        stringValueMap["deqtimedelta"] = std::to_string(pkt.deqTimedelta);
 
         std::string outputString = "";
 
@@ -98,12 +96,11 @@ void printUsage(FILE *fout) {
             "                      The output will print these fields in sequence, separated by a single space\n"
             "                      List of fields:\n"
             "                      flowid\n"
-            "                      enqtstamp (18-bit ns)\n"
+            "                      ingressglobaltstamp (48-bit ns)\n"
             "                      egressglobaltstamp (48-bit ns)\n"
             "                      markbit\n"
             "                      enqqdepth (cells)\n"
             "                      deqqdepth (cells)\n"
-            "                      deqtimedelta\n"
             "                      framelen (bytes)\n"
             "                      capturetstamp (s.us)\n"
             "    -r              : Reduced file - only extract pkts when qdepths have changed"
@@ -265,12 +262,11 @@ int main(int argc, char* argv[]){
 
         // Extract the qmetadata parameters
         currPkt.flowId = qmlayer->getFlowId();
-        currPkt.enqTimestamp = qmlayer->getEnqTimestamp();
+        currPkt.globalIngressTimestamp = qmlayer->getGlobalIngressTimestamp();
         currPkt.globalEgressTimestamp = qmlayer->getGlobalEgressTimestamp();
         currPkt.markBit = qmlayer->getMarkBit();
         currPkt.enqQdepth = qmlayer->getEnqQdepth();
         currPkt.deqQdepth = qmlayer->getDeqQdepth();
-        currPkt.deqTimedelta = qmlayer->getDeqTimedelta();
 
         if(isFirstPacket){
             base_usecs  = currPkt.captureTstamp.tv_sec * 1000000L + currPkt.captureTstamp.tv_usec;
