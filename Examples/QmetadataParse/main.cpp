@@ -19,7 +19,7 @@
 #include <iterator> // for std::begin, std::end
 #include <unordered_map>
 
-#define NUM_FIELDS 9
+#define NUM_FIELDS 8
 
 typedef struct
 {
