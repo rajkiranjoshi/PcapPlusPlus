@@ -203,7 +203,12 @@ namespace pcpp
 		/**
 		 * QMETADATA protocol
 		 */
-		QMETADATA = 0x40000000
+
+		QMETADATA = 0x40000000,
+		/**
+		 * SNAPSHOT protocol
+		 */
+		SNAPSHOT = 0x80000000
 	};
 
 
