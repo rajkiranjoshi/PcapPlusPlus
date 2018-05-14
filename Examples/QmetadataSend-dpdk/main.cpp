@@ -8,6 +8,7 @@
 #include "PayloadLayer.h"
 #include "QmetadataLayer.h"
 #include "Logger.h"
+#include <arpa/inet.h>
 #include <iostream>
 #include <thread>
 #include <signal.h>
@@ -153,14 +154,32 @@ int main(int argv, char* argc[]){
         printf("Exiting...\n");
         exit(1);
     }
-    
-/*    // 10 packets sending code 
+
+/*
+    // 10 packets sending code 
     for(int i=0; i < 10; i++)
     {
         sendPacketsTo->sendPacket(newPacket, 0); // 0 is the TX queue
     }
     exit(0);
-    */
+*/
+
+/*
+    // 5 packets with different source port
+    int start_src_port = 1000;
+    pcpp::Packet tmpPacket;
+    for(int i=0; i < 5; i++){
+        tmpPacket = pcpp::Packet(newPacket);
+        pcpp::UdpLayer* udp = tmpPacket.getLayerOfType<pcpp::UdpLayer>();
+        pcpp::udphdr* udpHdr = (pcpp::udphdr*) udp->getUdpHeader();
+        udpHdr->portSrc = htons(start_src_port++);
+
+        sendPacketsTo->sendPacket(tmpPacket, 0);
+        PCAP_SLEEP(1);
+    }
+    exit(0);
+*/
+    
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(WORKER_THREAD_CORE, &cpuset); 
@@ -179,7 +198,7 @@ int main(int argv, char* argc[]){
     sigIntHandler.sa_flags = 0;
     sigaction(SIGINT, &sigIntHandler, NULL);
 
-    pause();
+    //pause();
 
 
   
