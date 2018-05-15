@@ -11,6 +11,7 @@
 #include "SipLayer.h"
 #include "QmetadataLayer.h"
 #include "SnapshotLayer.h"
+#include "SnapshotDebugLayer.h"
 #include "Logger.h"
 #include <string.h>
 #include <sstream>
@@ -104,6 +105,8 @@ void UdpLayer::parseNextLayer()
 		m_NextLayer = new QmetadataLayer(m_Data + sizeof(udphdr), m_DataLen - sizeof(udphdr), this, m_Packet);
 	else if (portDst == 9999)
 		m_NextLayer = new SnapshotLayer(m_Data + sizeof(udphdr), m_DataLen - sizeof(udphdr), this, m_Packet);
+	else if (portDst == 8888)
+		m_NextLayer = new SnapshotDebugLayer(m_Data + sizeof(udphdr), m_DataLen - sizeof(udphdr), this, m_Packet);
 	else
 		m_NextLayer = new PayloadLayer(m_Data + sizeof(udphdr), m_DataLen - sizeof(udphdr), this, m_Packet);
 }

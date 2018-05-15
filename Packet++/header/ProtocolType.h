@@ -208,7 +208,11 @@ namespace pcpp
 		/**
 		 * SNAPSHOT protocol
 		 */
-		SNAPSHOT = 0x80000000
+		SNAPSHOT = 0x80000000,
+		/**
+		 * SNAPSHOT Debug protocol
+		 */
+		SNAPSHOTDEBUG = 0x100000000
 	};
 
 
