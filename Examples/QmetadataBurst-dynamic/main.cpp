@@ -166,35 +166,9 @@ int main()
         printf("Exiting...\n");
         exit(1);
     }
-
     
 
-
-    /********* THREAD INITIALIZATION & MANAGEMENT *********/
- 
-    // /* SENDER THREAD */
-    // cpu_set_t cpuset1;
-    // CPU_ZERO(&cpuset1);
-    // CPU_SET(SEND_THREAD_CORE, &cpuset1); 
-
-    // stopSending = false; // this is thread UNSAFE. 
-    //                      // But in our case only the main thread writes. The sender thread simply reads.
-
-    // sendThread = std::thread(send_func, sendPacketsTo, newSendPacket, &stopSending);
-    // int aff = pthread_setaffinity_np(sendThread.native_handle(), sizeof(cpu_set_t), &cpuset1);
-    // printf("Sending thread now running on vcpu #%d\n", SEND_THREAD_CORE);
-
-    // sleep(1);
-    // printf("Sleeping for 10s before starting the BURST thread\n");
-    // sleep(10);
-    // printf("\n### Start the packet capture at receiver NOW ###\n");
-    // printf("Press any key to continue . . .\n");
-    // getchar();
-
-    /* BURSTER THREAD */
-    cpu_set_t cpuset2;
-    CPU_ZERO(&cpuset2);
-    CPU_SET(BURST_THREAD_CORE, &cpuset2);
+    /********* BURST PACKETS PREPARATION *********/
 
     FILE *fin1;
     float slptime;
@@ -231,17 +205,7 @@ int main()
 		}
 	}
 	fclose(fin);
-/*
-	for(int i=0; i < NUM_OF_BURSTS; i++){
-		num_pkts = burst_size[i];
 
-		for(int j=0; j < num_pkts; j++){
-			printf("%d ", pkt_sizes[i][j]);
-		}
-
-		printf("\n");
-	}
-*/
 	/*Construct packets for each bursts*/
     pcpp::Packet** pkt_burst;
     int number_pkts_in_burst, j;
@@ -252,10 +216,6 @@ int main()
         j = 0;
         pkt_burst = (pcpp::Packet **) malloc(number_pkts_in_burst * sizeof(pcpp::Packet*));
         while(j < number_pkts_in_burst){
-            
-            
-            // pkt_burst[j] = (pcpp::Packet*) malloc(sizeof(pcpp::Packet));
-            // *pkt_burst[j] = construct_burst_packet(pkt_sizes[i][j]);
 
             pkt_burst[j] = construct_burst_packet(pkt_sizes[i][j]);
 
@@ -264,6 +224,34 @@ int main()
         burst_set[i] = pkt_burst;        
     }
 
+
+
+
+    /********* THREAD INITIALIZATION & MANAGEMENT *********/
+ 
+    // /* SENDER THREAD */
+    // cpu_set_t cpuset1;
+    // CPU_ZERO(&cpuset1);
+    // CPU_SET(SEND_THREAD_CORE, &cpuset1); 
+
+    // stopSending = false; // this is thread UNSAFE. 
+    //                      // But in our case only the main thread writes. The sender thread simply reads.
+
+    // sendThread = std::thread(send_func, sendPacketsTo, newSendPacket, &stopSending);
+    // int aff = pthread_setaffinity_np(sendThread.native_handle(), sizeof(cpu_set_t), &cpuset1);
+    // printf("Sending thread now running on vcpu #%d\n", SEND_THREAD_CORE);
+
+    // sleep(1);
+    // printf("Sleeping for 10s before starting the BURST thread\n");
+    // sleep(10);
+    // printf("\n### Start the packet capture at receiver NOW ###\n");
+    // printf("Press any key to continue . . .\n");
+    // getchar();
+
+    /* BURSTER THREAD */
+    cpu_set_t cpuset2;
+    CPU_ZERO(&cpuset2);
+    CPU_SET(BURST_THREAD_CORE, &cpuset2);
     burstThread = std::thread(burst_func, burstPacketsTo, burst_set, burst_size, sleeptime_inter_burst);
 
     burstThread.join();
