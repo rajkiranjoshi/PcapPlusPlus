@@ -29,6 +29,8 @@
 #define MBUFF_POOL_SIZE 2047  // (2^11 - 1) allow DPDK to hold these many packets in memory (at max).
                                 // See "sending algorithm" in DpdkDevice.h
 
+#define NUM_SEND_PACKETS 10000
+
 
 using namespace pcpp;
 using namespace std;
@@ -38,8 +40,10 @@ std::thread sendThread, burstThread;
 bool stopSending;
 
 
+
+/********************** PACKET CONSTRUCTION - START **********************/
+
 pcpp::Packet* construct_burst_packet(int packet_size){
-/********************** PACKET CONSTRUCTION **********************/
 
     /* BURST PKT CONSTRUCTION STARTS */
     pcpp::Packet* newBurstPacket = new pcpp::Packet(packet_size);
@@ -89,6 +93,11 @@ pcpp::Packet* construct_burst_packet(int packet_size){
     return newBurstPacket;
 }
 
+
+/********************** PACKET CONSTRUCTION - END **********************/
+
+
+
 void burst_func(DpdkDevice* dev, pcpp::Packet** burst_set[NUM_OF_BURSTS], int burst_size[NUM_OF_BURSTS], float sleeptime_inter_burst[NUM_OF_BURSTS]){
 
     usleep(100000); // sleep for 100ms to allow thread affinity to be set
@@ -115,6 +124,8 @@ void burst_func(DpdkDevice* dev, pcpp::Packet** burst_set[NUM_OF_BURSTS], int bu
 
     printf("[BURSTING Thread] Stopping microbursts ...\n");
 }
+
+
 
 int main()
 {
@@ -168,7 +179,7 @@ int main()
     }
     
 
-    /********* BURST PACKETS PREPARATION *********/
+    /********* BURST PACKETS PREPARATION - START *********/
 
     FILE *fin1;
     float slptime;
@@ -223,6 +234,14 @@ int main()
         }
         burst_set[i] = pkt_burst;        
     }
+
+    /********* BURST PACKETS PREPARATION - END *********/
+
+
+    /********* SEND PACKETS PREPARATION - START *********/
+
+
+    /********* SEND PACKETS PREPARATION - END *********/
 
 
 
