@@ -15,7 +15,7 @@
 #include <algorithm>
 
 #define DEFAULT_TTL 12
-#define NUM_OF_BURSTS 11
+// #define NUM_OF_BURSTS 11
 #define CORE_MASK 341  // in binary it is 101010101. Meaning core # 8,6,4, 2 and 0 would be given to DPDK
                        // core 0 would be used as the DPDK master core by default. To change this, need to 
                        // change DpdkDeviceList::initDpdk() in DpdkDeviceList.cpp and rebuild PcapPlusPlus
@@ -158,7 +158,7 @@ pcpp::Packet* construct_send_packet(int packet_size){
 
 
 
-void burst_func(DpdkDevice* dev, pcpp::Packet** burst_set[NUM_OF_BURSTS], int burst_size[NUM_OF_BURSTS], float sleeptime_inter_burst[NUM_OF_BURSTS]){
+void burst_func(DpdkDevice* dev, pcpp::Packet** burst_set[], int burst_size[], float sleeptime_inter_burst[], int number_of_bursts){
 
     usleep(100000); // sleep for 100ms to allow thread affinity to be set
     printf("[BURSTING Thread] Starting microbursts ...\n");
@@ -170,8 +170,8 @@ void burst_func(DpdkDevice* dev, pcpp::Packet** burst_set[NUM_OF_BURSTS], int bu
     printf("%d\n", n);*/
 
     int i = 0;
-    //int packets[NUM_OF_BURSTS];
-    while(i < NUM_OF_BURSTS)
+    //int packets[numberOfBursts];
+    while(i < number_of_bursts)
     {
         const pcpp::Packet** burst_ptr = (const pcpp::Packet**) burst_set[i];
         dev->sendPackets(burst_ptr,burst_size[i]); // default Tx queue is 0
@@ -198,9 +198,23 @@ void send_func(int thread_id, pcpp::PcapLiveDevice* dev, pcpp::Packet** send_pkt
 }
 
 
-int main()
+int main(int argc, char *argv[])
 {
     
+    if(argc != 5){
+        printf("Usage: ./qmetadataburst <num of bursts> <burst_set file> <sleeptime file> <sender_pkt_sizes file>\n");
+        exit(1);
+    }
+
+    const int numberOfBursts = atoi(argv[1]);
+    char *burstSetFile = argv[2];
+    char *burstSleepFile = argv[3];
+    char *senderPktSizesFile = argv[4];
+
+    printf("############   Running for %d Bursts   ############\n", numberOfBursts);
+    printf("Using:\n%s\n%s\n%s\n",burstSetFile, burstSleepFile, senderPktSizesFile);
+    printf("###################################################\n");
+
     /********************** DPDK INITIALIZATION **********************/
 
 
@@ -295,11 +309,12 @@ int main()
 
     FILE *fin1;
     float slptime;
-    float sleeptime_inter_burst[NUM_OF_BURSTS];
+    float *sleeptime_inter_burst;
+    sleeptime_inter_burst = (float*) malloc(numberOfBursts * sizeof(float));
 
-    fin1 = fopen("sleeptime.txt","r");
+    fin1 = fopen(burstSleepFile,"r");
 
-    for(int i=0; i < NUM_OF_BURSTS; i++){
+    for(int i=0; i < numberOfBursts; i++){
         if(fscanf(fin1,"%f",&slptime) == EOF){
             printf("EOF while reading num_pkts\n");
             return 1;
@@ -311,12 +326,14 @@ int main()
     /*Get burst set*/
 	FILE *fin;
 	int num_pkts;
-	int burst_size[NUM_OF_BURSTS];
-	int* pkt_sizes[NUM_OF_BURSTS];
+	int *burst_size;
+    burst_size = (int*) malloc(numberOfBursts * sizeof(int));
+	int** pkt_sizes;
+    pkt_sizes = (int**) malloc(numberOfBursts * sizeof(int*));
 
-	fin = fopen("burst_set.txt","r");
+	fin = fopen(burstSetFile,"r");
 
-	for(int i=0; i < NUM_OF_BURSTS; i++){
+	for(int i=0; i < numberOfBursts; i++){
 		if(fscanf(fin,"%d",&num_pkts) == EOF){
 			printf("EOF while reading num_pkts\n");
 			return 1;
@@ -332,9 +349,10 @@ int main()
 	/*Construct packets for each bursts*/
     pcpp::Packet** pkt_burst;
     int number_pkts_in_burst, j;
-    pcpp::Packet** burst_set[NUM_OF_BURSTS];
+    pcpp::Packet*** burst_set;
+    burst_set = (pcpp::Packet***) malloc(numberOfBursts * sizeof(pcpp::Packet**));
     pcpp::Packet burst_pkt;
-    for(int i=0; i < NUM_OF_BURSTS; i++){
+    for(int i=0; i < numberOfBursts; i++){
         number_pkts_in_burst = burst_size[i];
         j = 0;
         pkt_burst = (pcpp::Packet **) malloc(number_pkts_in_burst * sizeof(pcpp::Packet*));
@@ -354,7 +372,7 @@ int main()
     /********* SEND PACKETS PREPARATION - START *********/
 
     int send_pkts_sizes[NUM_SEND_PACKETS];
-    FILE *fin_sender = fopen("sender_pkt_sizes_cache.dat", "r");
+    FILE *fin_sender = fopen(senderPktSizesFile, "r");
 
     int sender_pkt_size;
     int sender_pkt_sizes[NUM_SEND_PACKETS];
@@ -417,7 +435,7 @@ int main()
     cpu_set_t cpuset2;
     CPU_ZERO(&cpuset2);
     CPU_SET(BURST_THREAD_CORE, &cpuset2);
-    burstThread = std::thread(burst_func, burstPacketsTo, burst_set, burst_size, sleeptime_inter_burst);
+    burstThread = std::thread(burst_func, burstPacketsTo, burst_set, burst_size, sleeptime_inter_burst, numberOfBursts);
 
     burstThread.join();
     stopSending = true;
