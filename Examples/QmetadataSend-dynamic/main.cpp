@@ -11,6 +11,7 @@
 #include <iostream>
 #include <thread>
 #include <signal.h>
+#include <algorithm>
 
 #define NUM_THREADS 4
 #define MAX_NUM_THREADS 6
@@ -154,13 +155,25 @@ int main(int argv, char* argc[]){
     fclose(fin);
 
     
-    pcpp::Packet** send_pkts_array;
-    send_pkts_array = (pcpp::Packet**) malloc(NUM_SEND_PACKETS * sizeof(pcpp::Packet));
+    pcpp::Packet* send_pkts_array[NUM_THREADS][NUM_SEND_PACKETS];
+    //pcpp::Packet** send_pkts_array;
+    //send_pkts_array = (pcpp::Packet**) malloc(NUM_SEND_PACKETS * sizeof(pcpp::Packet));
 
     for(int i=0; i < NUM_SEND_PACKETS; i++){
-        send_pkts_array[i] = construct_send_packet(pkt_sizes[i]);
+        pcpp::Packet* pkt_ptr;
+        pkt_ptr = construct_send_packet(pkt_sizes[i]);
+        for(int j=0; j < NUM_THREADS; j++){
+            send_pkts_array[j][i] = pkt_ptr;
+        }
+        
     }
 
+    // Shuffle the send_pkts_array for each thread
+    for(int i=0; i < NUM_THREADS; i++){
+        std::random_shuffle(&send_pkts_array[i][0], &send_pkts_array[i][NUM_SEND_PACKETS]);
+    }
+
+    
 
     /********* SEND PACKETS PREPARATION - END *********/
 
@@ -215,7 +228,7 @@ int main(int argv, char* argc[]){
         CPU_SET(vcpu_list[i], &cpuset); 
 
         
-        workerThreads[i] = std::thread(send_func, i, dev, send_pkts_array, &stopSending);
+        workerThreads[i] = std::thread(send_func, i, dev, send_pkts_array[i], &stopSending);
         int aff = pthread_setaffinity_np(workerThreads[i].native_handle(), sizeof(cpu_set_t), &cpuset);
     }
 
