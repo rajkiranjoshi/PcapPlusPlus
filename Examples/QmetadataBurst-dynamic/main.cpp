@@ -421,6 +421,9 @@ int main()
 
     burstThread.join();
     stopSending = true;
+    for(int i=0; i < NUM_THREADS; i++){
+        workerThreads[i].join();
+    }
 
 	return 0;
 }
