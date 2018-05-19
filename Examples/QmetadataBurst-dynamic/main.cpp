@@ -3,6 +3,7 @@
 
 #include "stdlib.h"
 #include "DpdkDeviceList.h"
+#include "PcapLiveDeviceList.h"
 #include "EthLayer.h"
 #include "IPv4Layer.h"
 #include "UdpLayer.h"
@@ -11,6 +12,7 @@
 #include "PlatformSpecificUtils.h"
 #include <unistd.h>  // for sleep() and usleep()
 #include <thread>
+#include <algorithm>
 
 #define DEFAULT_TTL 12
 #define NUM_OF_BURSTS 11
@@ -24,19 +26,22 @@
 #define SENDER_DPDK_PORT 1
 #define DEFAULT_TTL 12
 
-#define BURSTER_DPDK_PORT 0
+#define BURSTER_DPDK_PORT 2
 #define BURST_THREAD_CORE 16  // vcpu # (as shown by lstopo). This is the second last core on socket #0
 #define MBUFF_POOL_SIZE 2047  // (2^11 - 1) allow DPDK to hold these many packets in memory (at max).
                                 // See "sending algorithm" in DpdkDevice.h
 
 #define NUM_SEND_PACKETS 10000
+#define NUM_THREADS 4
+#define MAX_NUM_THREADS 6
 
 
 using namespace pcpp;
 using namespace std;
 
-std::thread sendThread, burstThread;
+std::thread burstThread;
 
+std::vector<std::thread> workerThreads(NUM_THREADS);
 bool stopSending;
 
 
@@ -94,6 +99,61 @@ pcpp::Packet* construct_burst_packet(int packet_size){
 }
 
 
+pcpp::Packet* construct_send_packet(int packet_size){
+
+    /* SENDER PKT CONSTRUCTION STARTS */
+
+    pcpp::Packet* newSendPacket = new pcpp::Packet(packet_size);
+    pcpp::MacAddress srcMac("3c:fd:fe:b7:e7:f5");
+    pcpp::MacAddress dstMac("bb:bb:bb:bb:bb:bb");
+    pcpp::IPv4Address srcIP(std::string("20.1.1.2"));
+    pcpp::IPv4Address dstIP(std::string("40.1.1.2"));
+    uint16_t srcPort = 37777;
+    uint16_t dstPort = 7777;
+
+    pcpp::EthLayer* newEthLayer = new pcpp::EthLayer(srcMac, dstMac, PCPP_ETHERTYPE_IP); // 0x0800 -> IPv4
+    pcpp::IPv4Layer* newIPv4Layer = new pcpp::IPv4Layer(srcIP, dstIP);
+    newIPv4Layer->getIPv4Header()->timeToLive = DEFAULT_TTL;
+    pcpp::UdpLayer* newUDPLayer = new pcpp::UdpLayer(srcPort, dstPort);
+    pcpp::QmetadataLayer* newQmetadataLayer = new pcpp::QmetadataLayer(0);
+
+    int length_so_far = newEthLayer->getHeaderLen() + newIPv4Layer->getHeaderLen() + 
+                        newUDPLayer->getHeaderLen() + newQmetadataLayer->getHeaderLen();
+    int payload_length = packet_size - length_so_far;
+
+    // printf("SEND Header length before the payload is %d\n", length_so_far);
+    
+    uint8_t payload[payload_length];
+    int datalen = 4;
+    char data[datalen] = {'D','A','T','A'};
+    // Put the data values into the payload
+    int j = 0;
+    for(int i=0; i < payload_length; i++){
+        payload[i] = (uint8_t) int(data[j]);
+        j = (j + 1) % datalen;
+    }
+
+    // construct the payload layer
+    pcpp::PayloadLayer* newPayLoadLayer = new pcpp::PayloadLayer(payload, payload_length, false);
+
+    newSendPacket->addLayer(newEthLayer);
+    newSendPacket->addLayer(newIPv4Layer);
+    newSendPacket->addLayer(newUDPLayer);
+    newSendPacket->addLayer(newQmetadataLayer);
+    newSendPacket->addLayer(newPayLoadLayer);
+
+    // compute the calculated fields
+    newUDPLayer->computeCalculateFields();
+    newUDPLayer->calculateChecksum(true);
+    newIPv4Layer->computeCalculateFields(); // this takes care of the IPv4 checksum
+
+    /* SENDER PKT CONSTRUCTION ENDS */
+
+    return newSendPacket;
+    
+}
+
+
 /********************** PACKET CONSTRUCTION - END **********************/
 
 
@@ -111,7 +171,7 @@ void burst_func(DpdkDevice* dev, pcpp::Packet** burst_set[NUM_OF_BURSTS], int bu
 
     int i = 0;
     //int packets[NUM_OF_BURSTS];
-    while(i < 1)
+    while(i < NUM_OF_BURSTS)
     {
         const pcpp::Packet** burst_ptr = (const pcpp::Packet**) burst_set[i];
         dev->sendPackets(burst_ptr,burst_size[i]); // default Tx queue is 0
@@ -126,10 +186,22 @@ void burst_func(DpdkDevice* dev, pcpp::Packet** burst_set[NUM_OF_BURSTS], int bu
 }
 
 
+void send_func(int thread_id, pcpp::PcapLiveDevice* dev, pcpp::Packet** send_pkts_array, bool* stopSending){
+
+    printf("\n[Thread %d] Starting packet sending ...\n", thread_id);
+    
+    while(!*stopSending){
+        dev->sendPackets(send_pkts_array, NUM_SEND_PACKETS);
+    }
+
+    printf("\n[Thread %d] Stopping packet sending ...\n", thread_id);
+}
+
 
 int main()
 {
-/********************** DPDK INITIALIZATION **********************/
+    
+    /********************** DPDK INITIALIZATION **********************/
 
 
     if(DpdkDeviceList::initDpdk(CORE_MASK, MBUFF_POOL_SIZE))
@@ -178,6 +250,46 @@ int main()
         exit(1);
     }
     
+
+    /********************** PCAP DEV INITIALIZATION **********************/
+
+    if(NUM_THREADS > MAX_NUM_THREADS){
+        printf("NUM_THREADS is greater than MAX_NUM_THREADS\n");
+        exit(1);
+    }
+
+    std::string IPaddr = "20.1.1.2";
+
+    pcpp::PcapLiveDevice* dev = pcpp::PcapLiveDeviceList::getInstance().getPcapLiveDeviceByIp(IPaddr.c_str());
+
+    if (dev == NULL){
+        printf("Could not find the interface with IP '%s'\n", IPaddr.c_str());
+        exit(1);
+    }
+
+    // before capturing packets let's print some info about this interface
+    printf("Interface info:\n");
+    // get interface name
+    printf("   Interface name:        %s\n", dev->getName());
+    // get interface description
+    printf("   Interface description: %s\n", dev->getDesc());
+    // get interface MAC address
+    printf("   MAC address:           %s\n", dev->getMacAddress().toString().c_str());
+    // get default gateway for interface
+    printf("   Default gateway:       %s\n", dev->getDefaultGateway().toString().c_str());
+    // get interface MTU
+    printf("   Interface MTU:         %d\n", dev->getMtu());
+    // get DNS server if defined for this interface
+    if (dev->getDnsServers().size() > 0)
+        printf("   DNS server:            %s\n", dev->getDnsServers().at(0).toString().c_str());
+
+    // open the device before start capturing/sending packets
+    if (!dev->open())
+    {
+        printf("Cannot open device\n");
+        exit(1);
+    }
+
 
     /********* BURST PACKETS PREPARATION - START *********/
 
@@ -238,8 +350,42 @@ int main()
     /********* BURST PACKETS PREPARATION - END *********/
 
 
+
     /********* SEND PACKETS PREPARATION - START *********/
 
+    int send_pkts_sizes[NUM_SEND_PACKETS];
+    FILE *fin_sender = fopen("sender_pkt_sizes_cache.dat", "r");
+
+    int sender_pkt_size;
+    int sender_pkt_sizes[NUM_SEND_PACKETS];
+
+    // read the packet sizes
+    for(int i=0; i < NUM_SEND_PACKETS; i++){
+        if(fscanf(fin_sender,"%d",&sender_pkt_size) == EOF){
+            printf("EOF while reading pkt_size\n");
+            return 1;
+        }
+        sender_pkt_sizes[i] = sender_pkt_size;
+    }
+    fclose(fin_sender);
+
+    
+    pcpp::Packet* send_pkts_array[NUM_THREADS][NUM_SEND_PACKETS];
+
+
+    for(int i=0; i < NUM_SEND_PACKETS; i++){
+        pcpp::Packet* pkt_ptr;
+        pkt_ptr = construct_send_packet(sender_pkt_sizes[i]);
+        for(int j=0; j < NUM_THREADS; j++){
+            send_pkts_array[j][i] = pkt_ptr;
+        }
+        
+    }
+
+    // Shuffle the send_pkts_array for each thread
+    for(int i=0; i < NUM_THREADS; i++){
+        std::random_shuffle(&send_pkts_array[i][0], &send_pkts_array[i][NUM_SEND_PACKETS]);
+    }
 
     /********* SEND PACKETS PREPARATION - END *********/
 
@@ -248,25 +394,25 @@ int main()
 
     /********* THREAD INITIALIZATION & MANAGEMENT *********/
  
-    // /* SENDER THREAD */
-    // cpu_set_t cpuset1;
-    // CPU_ZERO(&cpuset1);
-    // CPU_SET(SEND_THREAD_CORE, &cpuset1); 
+    /* SENDER THREAD(S) */
+    int vcpu_list[MAX_NUM_THREADS] = {10, 12, 14, 30, 32, 34};   // usable vcpu's for sender
 
-    // stopSending = false; // this is thread UNSAFE. 
-    //                      // But in our case only the main thread writes. The sender thread simply reads.
+    stopSending = false; // this is thread UNSAFE. 
+                            // But in our case only the main thread writes. The worker threads simply read.
 
-    // sendThread = std::thread(send_func, sendPacketsTo, newSendPacket, &stopSending);
-    // int aff = pthread_setaffinity_np(sendThread.native_handle(), sizeof(cpu_set_t), &cpuset1);
-    // printf("Sending thread now running on vcpu #%d\n", SEND_THREAD_CORE);
+    printf("###############    STARTING SENDER THREAD(S)    ###############\n");
+    for(int i=0;i < NUM_THREADS; i++){
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(vcpu_list[i], &cpuset); 
 
-    // sleep(1);
-    // printf("Sleeping for 10s before starting the BURST thread\n");
-    // sleep(10);
-    // printf("\n### Start the packet capture at receiver NOW ###\n");
-    // printf("Press any key to continue . . .\n");
-    // getchar();
+        
+        workerThreads[i] = std::thread(send_func, i, dev, send_pkts_array[i], &stopSending);
+        int aff = pthread_setaffinity_np(workerThreads[i].native_handle(), sizeof(cpu_set_t), &cpuset);
+    }
 
+
+    printf("###############    STARTING BURSTER THREAD    ###############\n");
     /* BURSTER THREAD */
     cpu_set_t cpuset2;
     CPU_ZERO(&cpuset2);
@@ -274,6 +420,7 @@ int main()
     burstThread = std::thread(burst_func, burstPacketsTo, burst_set, burst_size, sleeptime_inter_burst);
 
     burstThread.join();
+    stopSending = true;
 
 	return 0;
 }
