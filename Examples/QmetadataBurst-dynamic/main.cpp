@@ -28,7 +28,7 @@
 
 #define BURSTER_DPDK_PORT 2
 #define BURST_THREAD_CORE 16  // vcpu # (as shown by lstopo). This is the second last core on socket #0
-#define MBUFF_POOL_SIZE 2047  // (2^11 - 1) allow DPDK to hold these many packets in memory (at max).
+#define MBUFF_POOL_SIZE 4095  // (2^12 - 1) allow DPDK to hold these many packets in memory (at max).
                                 // See "sending algorithm" in DpdkDevice.h
 
 #define NUM_SEND_PACKETS 10000
@@ -417,7 +417,7 @@ int main(int argc, char *argv[])
 
     stopSending = false; // this is thread UNSAFE. 
                             // But in our case only the main thread writes. The worker threads simply read.
-
+/*
     printf("###############    STARTING SENDER THREAD(S)    ###############\n");
     for(int i=0;i < NUM_THREADS; i++){
         cpu_set_t cpuset;
@@ -428,7 +428,7 @@ int main(int argc, char *argv[])
         workerThreads[i] = std::thread(send_func, i, dev, send_pkts_array[i], &stopSending);
         int aff = pthread_setaffinity_np(workerThreads[i].native_handle(), sizeof(cpu_set_t), &cpuset);
     }
-
+*/
 
     printf("###############    STARTING BURSTER THREAD    ###############\n");
     /* BURSTER THREAD */
@@ -439,9 +439,10 @@ int main(int argc, char *argv[])
 
     burstThread.join();
     stopSending = true;
+/*    
     for(int i=0; i < NUM_THREADS; i++){
         workerThreads[i].join();
     }
-
+*/
 	return 0;
 }

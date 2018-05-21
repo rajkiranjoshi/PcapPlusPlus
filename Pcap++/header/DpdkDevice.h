@@ -369,7 +369,7 @@ namespace pcpp
 			 * @param[in] transmitDescriptorsNumber An optional parameter for defining the number of TX descriptors that will be allocated for each TX queue.
 			 * Default value is 512
 			 */
-			DpdkDeviceConfiguration(uint16_t receiveDescriptorsNumber = 128, uint16_t transmitDescriptorsNumber = 512)
+			DpdkDeviceConfiguration(uint16_t receiveDescriptorsNumber = 128, uint16_t transmitDescriptorsNumber = 4096)
 			{
 				this->receiveDescriptorsNumber = receiveDescriptorsNumber;
 				this->transmitDescriptorsNumber = transmitDescriptorsNumber;

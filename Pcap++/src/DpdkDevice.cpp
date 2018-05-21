@@ -897,6 +897,7 @@ int sendPacketsInternal(rte_mbuf** mBufArr, int mBufArrLen, int devId, uint16_t 
 			mBufArr,
 			mBufArrLen);
 	LOG_DEBUG("rte_eth_tx_burst sent %d out of %d", packetsSent, mBufArrLen);
+	// printf("rte_eth_tx_burst sent %d out of %d\n", packetsSent, mBufArrLen);  // RJ debug
 
 	// free all mBufs we allocated
 	for (int i = 0; i < mBufArrLen; i++)
@@ -930,7 +931,7 @@ int DpdkDevice::sendPacketsInner(uint16_t txQueueId, void* packetStorage, packet
 	int totalPacketsToSend = arrLength;
 	int packetIndex = 0;
 
-	#define PACKET_TRANSMITION_THRESHOLD 0.8
+	#define PACKET_TRANSMITION_THRESHOLD 1.0   // 0.8
 	#define PACKET_TX_TRIES 1.5
 
 	int mBufArraySize = (int)(m_Config.transmitDescriptorsNumber*PACKET_TRANSMITION_THRESHOLD);
