@@ -417,7 +417,7 @@ int main(int argc, char *argv[])
 
     stopSending = false; // this is thread UNSAFE. 
                             // But in our case only the main thread writes. The worker threads simply read.
-/*
+
     printf("###############    STARTING SENDER THREAD(S)    ###############\n");
     for(int i=0;i < NUM_THREADS; i++){
         cpu_set_t cpuset;
@@ -428,21 +428,22 @@ int main(int argc, char *argv[])
         workerThreads[i] = std::thread(send_func, i, dev, send_pkts_array[i], &stopSending);
         int aff = pthread_setaffinity_np(workerThreads[i].native_handle(), sizeof(cpu_set_t), &cpuset);
     }
-*/
+
 
     printf("###############    STARTING BURSTER THREAD    ###############\n");
-    /* BURSTER THREAD */
+    // BURSTER THREAD
     cpu_set_t cpuset2;
     CPU_ZERO(&cpuset2);
     CPU_SET(BURST_THREAD_CORE, &cpuset2);
     burstThread = std::thread(burst_func, burstPacketsTo, burst_set, burst_size, sleeptime_inter_burst, numberOfBursts);
-
     burstThread.join();
+  
+
     stopSending = true;
-/*    
+    
     for(int i=0; i < NUM_THREADS; i++){
         workerThreads[i].join();
     }
-*/
+
 	return 0;
 }
