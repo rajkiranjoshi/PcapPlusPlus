@@ -2,7 +2,7 @@ include /usr/local/etc/PcapPlusPlus.mk
 
 .PHONY: all clean
 
-all: getpacketdrops getseqnumbers
+all: getpacketdrops getseqnumbers reorderpackets
 	
 
 getpacketdrops: getPacketDrops.cpp
@@ -17,8 +17,11 @@ getextrapackets: getExtraPackets.cpp
 	g++ $(PCAPPP_INCLUDES) -std=c++11 -o getExtraPackets.o -c getExtraPackets.cpp
 	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o getextrapackets getExtraPackets.o $(PCAPPP_LIBS)
 
+reorderpackets: reorderPackets.cpp
+	g++ $(PCAPPP_INCLUDES) -std=c++11 -o reorderPackets.o -c reorderPackets.cpp
+	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o reorderpackets reorderPackets.o $(PCAPPP_LIBS)	
 
 clean:
-	rm *.o getpacketdrops getseqnumbers getextrapackets
+	rm *.o getpacketdrops getseqnumbers getextrapackets reorderpackets
 
 
