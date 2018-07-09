@@ -19,49 +19,6 @@
 #include <unordered_map>
 
 
-/*
-int recordSeqNo(uint32_t sequenceNumber){
-    totalPacketsSent++;
-
-    uint32_t relativeSeqNumber = sequenceNumber - firstSeqNumber;
-
-    
-    if(relativeSeqNumber < prevRelativeSeqNumber){
-        long int diff = prevRelativeSeqNumber - relativeSeqNumber;
-
-        if(diff > IMPOSSIBLE_PKT_SIZE){
-            era++;
-        }
-        
-    }
-
-    uint64_t key = era * MAX_UINT32 + relativeSeqNumber;
-
-    auto it = pktCounts.find(key);
-    if(it == pktCounts.end()){ // not found in the map
-        pktCounts[key] = 1;
-    }
-    else{
-        it->second += 1;
-    }
-    prevRelativeSeqNumber = relativeSeqNumber;
-}
-
-void printReTxPkts(){
-    unsigned int numberOfReTxPackets = 0;
-
-    //printf("#############################\n");
-    for(auto it=pktCounts.begin(); it != pktCounts.end(); it++){
-        if(it->second > 1 && it->first !=1){
-            //printf("%lu: %u\n",it->first, it->second);
-            numberOfReTxPackets += (it->second - 1);
-        }
-    }
-
-    printf("%u %lu\n", numberOfReTxPackets, totalPacketsSent);
-}
-
-*/
 int main(int argc, char* argv[]){
 
     pcpp::AppName::init(argc, argv);
