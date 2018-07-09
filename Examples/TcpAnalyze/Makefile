@@ -9,11 +9,11 @@ getpacketdrops: getPacketDrops.cpp
 	g++ $(PCAPPP_INCLUDES) -std=c++11 -o getPacketDrops.o -c getPacketDrops.cpp
 	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o getpacketdrops getPacketDrops.o $(PCAPPP_LIBS)
 
-getseqnumbers:
+getseqnumbers: getSeqNumbers.cpp
 	g++ $(PCAPPP_INCLUDES) -std=c++11 -o getSeqNumbers.o -c getSeqNumbers.cpp
 	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o getseqnumbers getSeqNumbers.o $(PCAPPP_LIBS)
 
-getextrapackets:
+getextrapackets: getExtraPackets.cpp
 	g++ $(PCAPPP_INCLUDES) -std=c++11 -o getExtraPackets.o -c getExtraPackets.cpp
 	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o getextrapackets getExtraPackets.o $(PCAPPP_LIBS)
 
