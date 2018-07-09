@@ -53,6 +53,17 @@ void send_func(int thread_id, pcpp::PcapLiveDevice* dev, pcpp::Packet parsedPack
 
 int main(int argv, char* argc[]){
 
+    int mtu_length;
+
+    // See if packet size is provided as an argument
+    if(argv == 2){
+        mtu_length = atoi(argc[1]);
+    }
+    else{
+        mtu_length = MTU_LENGTH;
+    }
+    printf("Using MTU LENGTH = %d\n", mtu_length);
+
     // construct the required packet
     pcpp::Packet newPacket(MTU_LENGTH);
     pcpp::MacAddress srcMac("3c:fd:fe:b7:e7:f4");
@@ -70,7 +81,7 @@ int main(int argv, char* argc[]){
 
     int length_so_far = newEthLayer.getHeaderLen() + newIPv4Layer.getHeaderLen() + 
                         newUDPLayer.getHeaderLen() + newQmetadataLayer.getHeaderLen();
-    int payload_length = MTU_LENGTH - length_so_far;
+    int payload_length = mtu_length - length_so_far;
 
     printf("Header length before the payload is %d\n", length_so_far);
     
@@ -130,10 +141,11 @@ int main(int argv, char* argc[]){
         exit(1);
     }
 
-/*    for(int i=0; i < 5; i++){
+    for(int i=0; i < 10; i++){
         dev->sendPacket(&newPacket);
-        PCAP_SLEEP(1);
-    }*/
+        sleep(1);
+    }
+    exit(0);
     
     for(int i=0;i < NUM_THREADS; i++){
         cpu_set_t cpuset;
@@ -154,7 +166,7 @@ int main(int argv, char* argc[]){
     sigIntHandler.sa_flags = 0;
     sigaction(SIGINT, &sigIntHandler, NULL);
 
-    pause();
+    //pause();
 
     
 

@@ -12,6 +12,7 @@
 #include <iostream>
 #include <thread>
 #include <signal.h>
+#include <cstdlib>  // for for atoi
 
 using namespace std::chrono;
 using namespace pcpp;
@@ -69,8 +70,18 @@ void send_func(DpdkDevice* dev, pcpp::Packet parsedPacket, bool* stopSending){
 
 int main(int argv, char* argc[]){
 
-    
+    int mtu_length;
     // LoggerPP::getInstance().setAllModlesToLogLevel(LoggerPP::Debug);
+
+
+    // See if packet size is provided as an argument
+    if(argv == 2){
+        mtu_length = atoi(argc[1]);
+    }
+    else{
+        mtu_length = MTU_LENGTH;
+    }
+    printf("Using MTU LENGTH = %d\n", mtu_length);
 
     // construct the required packet
     pcpp::Packet newPacket(MTU_LENGTH);
@@ -89,7 +100,7 @@ int main(int argv, char* argc[]){
 
     int length_so_far = newEthLayer.getHeaderLen() + newIPv4Layer.getHeaderLen() + 
                         newUDPLayer.getHeaderLen() + newQmetadataLayer.getHeaderLen();
-    int payload_length = MTU_LENGTH - length_so_far;
+    int payload_length = mtu_length - length_so_far;
 
     printf("Header length before the payload is %d\n", length_so_far);
     
@@ -157,9 +168,10 @@ int main(int argv, char* argc[]){
 
 /*
     // 10 packets sending code 
-    for(int i=0; i < 10; i++)
+    for(int i=0; i < 1000; i++)
     {
         sendPacketsTo->sendPacket(newPacket, 0); // 0 is the TX queue
+        usleep(500);
     }
     exit(0);
 */
@@ -198,7 +210,7 @@ int main(int argv, char* argc[]){
     sigIntHandler.sa_flags = 0;
     sigaction(SIGINT, &sigIntHandler, NULL);
 
-    //pause();
+    pause();
 
 
   

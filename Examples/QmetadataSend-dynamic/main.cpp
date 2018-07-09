@@ -156,8 +156,7 @@ int main(int argv, char* argc[]){
 
     
     pcpp::Packet* send_pkts_array[NUM_THREADS][NUM_SEND_PACKETS];
-    //pcpp::Packet** send_pkts_array;
-    //send_pkts_array = (pcpp::Packet**) malloc(NUM_SEND_PACKETS * sizeof(pcpp::Packet));
+
 
     for(int i=0; i < NUM_SEND_PACKETS; i++){
         pcpp::Packet* pkt_ptr;
@@ -217,7 +216,7 @@ int main(int argv, char* argc[]){
 
     /*********   THREAD INITIALIZATION AND MANAGEMENT   *********/
 
-    int vcpu_list[MAX_NUM_THREADS] = {10, 12, 14, 30, 32, 34};   // usable vcpu's
+    int vcpu_list[MAX_NUM_THREADS] = {10, 12, 14, 30, 32, 34};   // usable vcpu's for sender
 
     stopSending = false; // this is thread UNSAFE. 
                             // But in our case only the main thread writes. The worker threads simply read.
