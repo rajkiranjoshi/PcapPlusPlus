@@ -18,17 +18,8 @@
 #include <iterator> // for std::begin, std::end
 #include <unordered_map>
 
-#define MAX_UINT32 4294967296
-#define IMPOSSIBLE_PKT_SIZE 4000000000
 
-
-uint64_t totalPacketsSent=0;
-std::map<uint64_t, uint32_t> pktCounts;
-uint32_t firstSeqNumber;
-uint32_t prevRelativeSeqNumber = 0;
-int era = 0;
-
-
+/*
 int recordSeqNo(uint32_t sequenceNumber){
     totalPacketsSent++;
 
@@ -70,15 +61,12 @@ void printReTxPkts(){
     printf("%u %lu\n", numberOfReTxPackets, totalPacketsSent);
 }
 
-
+*/
 int main(int argc, char* argv[]){
 
     pcpp::AppName::init(argc, argv);
 
     std::string filename = "";
-    char cmd[MAX_CMD_LENGTH];
-    FILE *cmd_output;
-    unsigned int TOTAL_PKTS;
 
     if (argc != 3){
         printf("Usage: %s <pcap_file> <target_dst_IP>\n", argv[0]);
@@ -113,17 +101,28 @@ int main(int argc, char* argv[]){
     pcpp::RawPacket rawPacket;
     pcpp::Packet parsedPacket;
     pcpp::IPv4Layer* ipv4layer;
+    pcpp::iphdr* iphdr;
     pcpp::TcpLayer* tcplayer;
     pcpp::tcphdr *tcphdr;
     
-    // get the first seqNumber
+    uint16_t totalLen;
+    uint32_t ipHdrLen, tcpHdrLen, tcpPayLoadLen;
+    uint64_t totalPacketsReceived = 0;
+    uint32_t firstSeqNumber;
+    uint32_t nextExpectedSeqNumber;
+    uint32_t extraPackets = 0;
+    bool reorderingDetected = false;
+    bool fin = false;
+
+    // read off the first packet and record the firstSeqNumber
     reader->getNextPacket(rawPacket);
+    totalPacketsReceived++;
     parsedPacket = pcpp::Packet(&rawPacket, pcpp::TCP); // TCP -> parse until this layer only
     tcplayer = parsedPacket.getLayerOfType<pcpp::TcpLayer>();
     tcphdr = tcplayer->getTcpHeader();
     firstSeqNumber = ntohl(tcphdr->sequenceNumber);
 
-    recordSeqNo(firstSeqNumber);
+    nextExpectedSeqNumber = firstSeqNumber + 1; // assuming first pkt is the SYN
 
     while (reader->getNextPacket(rawPacket))
     {
@@ -133,26 +132,48 @@ int main(int argc, char* argv[]){
         tcplayer = parsedPacket.getLayerOfType<pcpp::TcpLayer>();
         tcphdr = tcplayer->getTcpHeader();
 
-        /*bool syn = (bool)tcphdr->synFlag;
-        bool psh = (bool)tcphdr->pshFlag;
-        bool rst = (bool)tcphdr->rstFlag;
-        bool ack = (bool)tcphdr->ackFlag;
-        bool fin = (bool)tcphdr->finFlag;*/
-        
         uint32_t currSeqNumber = ntohl(tcphdr->sequenceNumber);
 
         pcpp::IPv4Address currDstIP = ipv4layer->getDstIpAddress();
 
-
         if(currDstIP == targetDstIP){
-            recordSeqNo(currSeqNumber);
+            totalPacketsReceived++;
+
+            //printf("nextExpectedSeqNumber:%u currSeqNumber:%u\n", nextExpectedSeqNumber -firstSeqNumber, currSeqNumber - firstSeqNumber);
+            if(currSeqNumber < nextExpectedSeqNumber){
+                extraPackets++;
+                // printf("EXTRA PKT: SeqNo = %u\n", currSeqNumber - firstSeqNumber);
+                continue;
+            }
+            else if (currSeqNumber > nextExpectedSeqNumber){ // there is reordering
+                /*
+                printf("############# ALERT #############\n");
+                printf("nextExpectedSeqNumber:%u currSeqNumber:%u\n", nextExpectedSeqNumber -firstSeqNumber, currSeqNumber - firstSeqNumber);
+                printf("First reordered packet has relative SeqNo = %u\n", currSeqNumber - firstSeqNumber);
+                */
+                reorderingDetected = true;
+                break;
+            }
+
+            // check if FIN pkt. If so stop the processing
+            fin = (bool)tcphdr->finFlag;
+            if(fin)
+                break;
+
+            // calculate the nextExpectedSeqNumber
+            totalLen = ntohs(ipv4layer->getIPv4Header()->totalLength);
+            ipHdrLen = ipv4layer->getHeaderLen();
+            tcpHdrLen = tcphdr->dataOffset * 4; // dataOffset tells tcp header length in terms of 4-byte words
+            tcpPayLoadLen = totalLen - ipHdrLen - tcpHdrLen;
+            nextExpectedSeqNumber = currSeqNumber + tcpPayLoadLen;
+            //printf("Seq:%u Len:%u\n",currSeqNumber - firstSeqNumber, tcpPayLoadLen);
+            //std::getchar();
         }
     } // end of the while loop
 
     reader->close();
 
-
-    printReTxPkts();
+    printf("%u %s\n", extraPackets, reorderingDetected? "Yes":"No");
 
 
     return 0;
