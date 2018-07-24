@@ -2,7 +2,7 @@ include /usr/local/etc/PcapPlusPlus.mk
 
 .PHONY: all clean
 
-all: getpacketdrops getseqnumbers reorderpackets
+all: getpacketdrops getseqnumbers reorderpackets getextrapackets
 	
 
 getpacketdrops: getPacketDrops.cpp
