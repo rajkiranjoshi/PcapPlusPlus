@@ -85,15 +85,37 @@ int main(int argc, char* argv[]){
     unsigned long int curr_usecs, actual_usecs, sec, usec;
     std::string captureTsString;
 
+
     // get the first timestamp
     reader->getNextPacket(rawPacket);
     captureTstamp = rawPacket.getPacketTimeStamp();
+    //printf("%ld", captureTstamp.tv_sec);
+    //exit(1)
     curr_usecs = captureTstamp.tv_sec * 1000000L + captureTstamp.tv_usec;
     base_usecs = curr_usecs;  // only for the first packet`
     actual_usecs = curr_usecs - base_usecs;
     sec = actual_usecs / 1000000L;
-    usec = actual_usecs % 1000000L;  
-    captureTsString = std::to_string(sec) + "." + std::to_string(usec);
+    usec = actual_usecs % 1000000L;
+    if(usec >= 100000){
+        captureTsString = std::to_string(sec) + "." + std::to_string(usec);
+    }  
+    else if(usec >= 10000){
+        captureTsString = std::to_string(sec) + "." + "0" + std::to_string(usec);
+        
+    }
+    else if(usec >= 1000){
+        captureTsString = std::to_string(sec) + "." + "00" + std::to_string(usec);
+    }
+    else if(usec >= 100){
+        captureTsString = std::to_string(sec) + "." + "000" + std::to_string(usec);
+    }
+    else if(usec >= 10){
+        captureTsString = std::to_string(sec) + "." + "0000" + std::to_string(usec);
+    }
+    else{
+        captureTsString = std::to_string(sec) + "." + "00000" + std::to_string(usec);
+    }
+    
 
     // get the first seqNumber
     parsedPacket = pcpp::Packet(&rawPacket); //, pcpp::TCP); // TCP -> parse until this layer only
@@ -114,7 +136,26 @@ int main(int argc, char* argv[]){
         actual_usecs = curr_usecs - base_usecs;
         sec = actual_usecs / 1000000L;
         usec = actual_usecs % 1000000L;  
-        captureTsString = std::to_string(sec) + "." + std::to_string(usec);
+        //captureTsString = std::to_string(sec) + "." + std::to_string(usec);
+        if(usec >= 100000){
+            captureTsString = std::to_string(sec) + "." + std::to_string(usec);
+        }  
+        else if(usec >= 10000){
+            captureTsString = std::to_string(sec) + "." + "0" + std::to_string(usec);
+            
+        }
+        else if(usec >= 1000){
+            captureTsString = std::to_string(sec) + "." + "00" + std::to_string(usec);
+        }
+        else if(usec >= 100){
+            captureTsString = std::to_string(sec) + "." + "000" + std::to_string(usec);
+        }
+        else if(usec >= 10){
+            captureTsString = std::to_string(sec) + "." + "0000" + std::to_string(usec);
+        }
+        else{
+            captureTsString = std::to_string(sec) + "." + "00000" + std::to_string(usec);
+        }
         
         // parse the raw packet
         parsedPacket = pcpp::Packet(&rawPacket, pcpp::TCP); // TCP -> parse until this layer only
