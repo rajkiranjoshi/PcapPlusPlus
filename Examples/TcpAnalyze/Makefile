@@ -25,7 +25,15 @@ reorderpackets: reorderPackets.cpp
 	g++ $(PCAPPP_INCLUDES) -std=c++11 -o reorderPackets.o -c reorderPackets.cpp
 	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o reorderpackets reorderPackets.o $(PCAPPP_LIBS)	
 
+getsrcportnumbers: getSrcPortNumbers.cpp
+	g++ $(PCAPPP_INCLUDES) -std=c++11 -o getSrcPortNumbers.o -c getSrcPortNumbers.cpp
+	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o getsrcportnumbers getSrcPortNumbers.o $(PCAPPP_LIBS)	
+
+getfct: getFCT.cpp
+	g++ $(PCAPPP_INCLUDES) -std=c++11 -o getFCT.o -c getFCT.cpp
+	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o getfct getFCT.o $(PCAPPP_LIBS)	
+
 clean:
-	rm *.o getpacketdrops getseqnumbers getextrapackets reorderpackets gettsseqnumbers
+	rm *.o getpacketdrops getseqnumbers getextrapackets reorderpackets gettsseqnumbers getsrcportnumbers getfct
 
 
