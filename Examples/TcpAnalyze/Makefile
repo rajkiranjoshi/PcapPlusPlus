@@ -27,13 +27,17 @@ reorderpackets: reorderPackets.cpp
 
 getsrcportnumbers: getSrcPortNumbers.cpp
 	g++ $(PCAPPP_INCLUDES) -std=c++11 -o getSrcPortNumbers.o -c getSrcPortNumbers.cpp
-	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o getsrcportnumbers getSrcPortNumbers.o $(PCAPPP_LIBS)	
+	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o getsrcportnumbers getSrcPortNumbers.o $(PCAPPP_LIBS)
+
+getlinkfailureflows: getLinkFailureFlows.cpp
+	g++ $(PCAPPP_INCLUDES) -std=c++11 -o getLinkFailureFlows.o -c getLinkFailureFlows.cpp
+	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o getlinkfailureflows getLinkFailureFlows.o $(PCAPPP_LIBS)
 
 getfct: getFCT.cpp
 	g++ $(PCAPPP_INCLUDES) -std=c++11 -o getFCT.o -c getFCT.cpp
 	g++ $(PCAPPP_LIBS_DIR) -static-libstdc++ -o getfct getFCT.o $(PCAPPP_LIBS)	
 
 clean:
-	rm *.o getpacketdrops getseqnumbers getextrapackets reorderpackets gettsseqnumbers getsrcportnumbers getfct
+	rm *.o getpacketdrops getseqnumbers getextrapackets reorderpackets gettsseqnumbers getsrcportnumbers getfct getlinkfailureflows
 
 
