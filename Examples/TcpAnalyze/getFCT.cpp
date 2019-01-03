@@ -31,17 +31,32 @@ typedef enum {
 // Global variables
 FILE *fout;
 uint16_t currSrcPort;
+uint16_t countFlow = 0;
 
 uint32_t nextExpectedSeqNumber;
+uint32_t prevSeqNumber;
 bool reTxDetected = false;
 bool flowStarted = false;
 
+bool randomDelay = false;
 
-inline void detectReTransmission(uint32_t currSeqNumber,uint32_t tcpPayLoadLen){
-	if(currSeqNumber < nextExpectedSeqNumber)
+bool fastRetrans = false;
+
+
+inline void detectReTransmission(uint32_t currSeqNumber, uint32_t tcpPayLoadLen, bool ack, bool syn, bool fin, bool psh){
+
+	
+	if (currSeqNumber < nextExpectedSeqNumber)
 		reTxDetected = true;
+	else if(currSeqNumber == prevSeqNumber){
+		// check if this is FIN-ACK retransmission
+		if(fin && ack && !psh)
+			reTxDetected = true;
+	}
+			
 
 	nextExpectedSeqNumber = currSeqNumber + tcpPayLoadLen;
+	prevSeqNumber = currSeqNumber;
 }
 
 
@@ -52,7 +67,7 @@ inline double tvToDouble(timeval tv){
     return floatValue;
 }
 
-void recordFlowTimes(timeval startTime, timeval threehandshakeTime, timeval transmissionTime, timeval FCTTime)
+void recordFlowTimes(timeval startTime, timeval threehandshakeTime, timeval transmissionTime, timeval FCTTime, uint16_t countFlow, bool randomDelay, bool fastRetrans)
 {
     timeval connTime, dataTxTime, dataCompletionTime, FCT;
     
@@ -61,9 +76,38 @@ void recordFlowTimes(timeval startTime, timeval threehandshakeTime, timeval tran
     timersub(&FCTTime, &threehandshakeTime, &dataCompletionTime);
     timersub(&FCTTime, &startTime, &FCT);
 
-    fprintf(fout,"%d %lf %lf %lf %lf %d\n", currSrcPort, tvToDouble(connTime), tvToDouble(dataCompletionTime), tvToDouble(FCT), tvToDouble(dataTxTime), int(reTxDetected));
+    fprintf(fout,"%d %lf %lf %lf %lf %d %d %d %d\n", currSrcPort, tvToDouble(connTime), tvToDouble(dataCompletionTime), tvToDouble(FCT), tvToDouble(dataTxTime), int(reTxDetected), countFlow, int(randomDelay), int(fastRetrans));
 
 }
+
+int decideRandomDelay(timeval ackTime, timeval finTime, timeval threehandshakeTime, timeval firstDataTime)
+{
+    timeval delay;
+    int result = 0;
+
+    timersub(&finTime, &ackTime, &delay);
+    if( tvToDouble(delay) > 0.005) //delay > 5ms
+        result = 1;
+    
+    timersub(&firstDataTime,&threehandshakeTime,&delay);
+    if( tvToDouble(delay) > 0.001) //delay > 1ms
+        result = 1;
+
+
+    return result;
+}
+
+
+inline void detectSynAckRTO(timeval synTime, timeval synAckTime){
+    timeval delay;
+
+    timersub(&synAckTime, &synTime, &delay);
+    if( tvToDouble(delay) > 1.0) //delay > 1sec
+        reTxDetected = true;
+
+    // printf("SynTime: %lf, SynAck Time: %lf, SynAck Delay: %lf\n", tvToDouble(synTime), tvToDouble(synAckTime), tvToDouble(delay));
+}
+
 
 int main(int argc, char* argv[]){
 
@@ -123,19 +167,25 @@ int main(int argc, char* argv[]){
     timeval transmissionTime;
     timeval FCTTime;
     timeval connTime, dataflowTime, FCT;
+    timeval ackTime, finTime, synAckTime, firstDataTime;
 
     uint16_t totalLen;
     uint32_t ipHdrLen, tcpHdrLen, tcpPayLoadLen;
     uint32_t prevACKNo = -1;
     uint32_t currSeqNumber, ackNo;
 
+    uint32_t currAckNo;
+    uint32_t prevAck = 0;
+
     unsigned int frameNo = 1;
+    unsigned int ackCount = 0;
 
     bool syn = false;
     bool ack = false;
     bool fin = false;
     bool data = false;
     bool rst = false;
+    bool psh = false;
 
 
     State preState = BLANK;
@@ -158,6 +208,7 @@ int main(int argc, char* argv[]){
         tcphdr = tcplayer->getTcpHeader();
 
         pcpp::IPv4Address currDstIP = ipv4layer->getDstIpAddress();
+        pcpp::IPv4Address currSrcIP = ipv4layer->getSrcIpAddress();
 
         if(currDstIP == targetDstIP){ //only see client side
 
@@ -165,6 +216,8 @@ int main(int argc, char* argv[]){
             ack = (bool)tcphdr->ackFlag;
             fin = (bool)tcphdr->finFlag;
             rst = (bool)tcphdr->rstFlag;
+            psh = (bool)tcphdr->pshFlag;
+
 
             // seq / ack number
             ackNo = ntohl(tcphdr->ackNumber);
@@ -188,7 +241,7 @@ int main(int argc, char* argv[]){
 
             // checking for reTransmissions
             if(flowStarted && !reTxDetected){
-            	detectReTransmission(currSeqNumber, tcpPayLoadLen);
+            	detectReTransmission(currSeqNumber, tcpPayLoadLen, ack, syn, fin, psh);
             }
 
             switch (preState){
@@ -204,9 +257,12 @@ int main(int argc, char* argv[]){
                         // For the ReTx detection logic
                         currSeqNumber = ntohl(tcphdr->sequenceNumber);
                         nextExpectedSeqNumber = currSeqNumber + 1;
+                        prevSeqNumber = currSeqNumber;
                         reTxDetected = false;
-                        flowStarted = true;  // for handling multiple flows in the same pcap
-
+                        flowStarted = true;  // for handling multiple flows in the same pcap. If it is mix flows, this will fail
+                        randomDelay = false; // handling random delay detection if multiple flows in the pcap
+                        prevAck = 0;
+                        fastRetrans = false;
                         break;
                     }
                     else if(ack && ackNo == (prevACKNo + 1)){ // ReTx of final ACK for teardown handshake
@@ -264,6 +320,7 @@ int main(int argc, char* argv[]){
                 {
                     if(data && ack && !fin){
                         preState = DATA;
+                        firstDataTime = rawPacket.getPacketTimeStamp();
                         break;
                     }
                     else{
@@ -297,9 +354,11 @@ int main(int argc, char* argv[]){
                         printf("[Frame %d] FCTTime: %lf\n\n\n", frameNo, tvToDouble(FCTTime));
                         // IMP NOTE: this final ACK could be lost and may need to be ReTx
                         //           the following recordFlowTimes() doesn't include this ReTx time
-                        recordFlowTimes(startTime, threehandshakeTime, transmissionTime, FCTTime);
+                        recordFlowTimes(startTime, threehandshakeTime, transmissionTime, FCTTime, countFlow, randomDelay, fastRetrans);
                         preState = BLANK;
                         // prevACKNo = -1;
+
+                        countFlow = countFlow +1;
 
                         // For reTx detection logic
                         flowStarted = false;
@@ -326,6 +385,39 @@ int main(int argc, char* argv[]){
             }
         }
         frameNo++;
+
+        if(currSrcIP == targetDstIP){ //see SERVER side
+            syn = (bool)tcphdr->synFlag;
+            ack = (bool)tcphdr->ackFlag;
+            fin = (bool)tcphdr->finFlag;
+
+            // printf("syn:%d, ack:%d, fin:%d\n",int(syn),int(ack),int(fin));
+
+            if (syn && ack){
+                synAckTime = rawPacket.getPacketTimeStamp();
+            }
+            else if(ack && !fin)
+            {
+                ackTime = rawPacket.getPacketTimeStamp();
+
+                // fast retransmission detection
+                currAckNo = ntohl(tcphdr->ackNumber);
+                if(currAckNo == prevAck)
+                    ackCount = ackCount + 1;
+                else
+                    ackCount = 0;
+
+                if(ackCount == 3)
+                    fastRetrans = true;
+                    
+                prevAck = currAckNo;                                      
+            }
+            else if(fin && ack){
+                finTime = rawPacket.getPacketTimeStamp();
+                randomDelay = decideRandomDelay(ackTime, finTime, threehandshakeTime, firstDataTime);
+                detectSynAckRTO(startTime, synAckTime);   // startTime is SynTime
+            }
+        }
     } // end of the while loop
 
     reader->close();
